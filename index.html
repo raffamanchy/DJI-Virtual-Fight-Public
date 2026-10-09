@@ -422,8 +422,10 @@
         document.addEventListener('pointerlockchange', () => {
             if (document.pointerLockElement === canvas) {
                 isPointerLocked = true;
+                overlay.classList.add('opacity-0', 'pointer-events-none');
             } else {
                 isPointerLocked = false;
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
             }
         });
 
@@ -445,12 +447,10 @@
         window.addEventListener('touchstart', (e) => {
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
-                // Left side for joystick
                 if (t.clientX < window.innerWidth / 2 && joystickTouchId === null) {
                     joystickTouchId = t.identifier;
                     joystickCenter = { x: t.clientX, y: t.clientY };
                 } 
-                // Right side for looking around
                 else if (t.clientX >= window.innerWidth / 2 && touchLookId === null) {
                     touchLookId = t.identifier;
                     lastTouchX = t.clientX;
@@ -565,7 +565,6 @@
             if (KEYS.d) moveDir.sub(right);
             if (KEYS.g) moveDir.add(right);
 
-            // Add mobile joystick influence
             if (mobileMoveDir.y !== 0) {
                 const fCopy = forward.clone().multiplyScalar(mobileMoveDir.y);
                 moveDir.add(fCopy);
