@@ -68,7 +68,7 @@
             height: 100%;
             background: #000000;
             border: 4px solid #b5b5b5;
-            border-radius: 10px;
+            border-radius: 4px;
             position: relative;
             overflow: hidden;
             box-shadow: 0 4px 12px rgba(0,0,0,0.7);
@@ -89,7 +89,7 @@
             height: 16px; 
             background: #00ff00; 
             border: 2px solid #ffffff;
-            border-radius: 50px;
+            border-radius: 2px;
             top: 50%; 
             left: 50%; 
             transform: translate(-50%, -50%);
@@ -305,6 +305,87 @@
     </div>
 
     <script>
+        // --- AUDIO SYSTEM SETUP ---
+        let audioCtx = null;
+        let motorOsc = null;
+        let motorGain = null;
+        let windNode = null;
+        let windGain = null;
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            // 1. Motor Whine Synthesizer (Sawtooth oscillator for multi-rotor buzz)
+            motorOsc = audioCtx.createOscillator();
+            motorOsc.type = 'sawtooth';
+            motorOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
+
+            motorGain = audioCtx.createGain();
+            motorGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+            motorOsc.connect(motorGain);
+            motorGain.connect(audioCtx.destination);
+            motorOsc.start();
+
+            // 2. Wind Rush Synthesizer (Filtered White Noise)
+            const bufferSize = audioCtx.sampleRate * 2;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+
+            windNode = audioCtx.createBufferSource();
+            windNode.buffer = noiseBuffer;
+            windNode.loop = true;
+
+            const windFilter = audioCtx.createBiquadFilter();
+            windFilter.type = 'bandpass';
+            windFilter.frequency.setValueAtTime(400, audioCtx.currentTime);
+            windFilter.Q.setValueAtTime(1.0, audioCtx.currentTime);
+
+            windGain = audioCtx.createGain();
+            windGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+            windNode.connect(windFilter);
+            windFilter.connect(windGain);
+            windGain.connect(audioCtx.destination);
+            windNode.start();
+        }
+
+        function playCrashSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.3);
+
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function updateAudio(throttle, speed) {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+
+            // Motor pitch & volume scales with throttle
+            const targetFreq = 80 + throttle * 450;
+            const targetMotorGain = isArmed ? (0.05 + throttle * 0.15) : 0;
+            motorOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.05);
+            motorGain.gain.setTargetAtTime(targetMotorGain, audioCtx.currentTime, 0.05);
+
+            // Wind volume scales with speed
+            const targetWindGain = Math.min(0.25, (speed / 60) * 0.25);
+            windGain.gain.setTargetAtTime(targetWindGain, audioCtx.currentTime, 0.1);
+        }
+
         const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
         const stickScale = isMobile ? 1.0 : 1.2; 
@@ -401,12 +482,11 @@
             scene.add(line);
         }
 
-        // --- SHOPPING MALL & MAP PROPS (Inspired by video) ---
+        // --- SHOPPING MALL & MAP PROPS ---
         const mallConcreteMat = new THREE.MeshBasicMaterial({ color: 0xdce3ed });
         const mallDarkMat = new THREE.MeshBasicMaterial({ color: 0x2b323d });
         const glassBuildingMat = new THREE.MeshBasicMaterial({ color: 0x3d5a73, transparent: true, opacity: 0.75 });
 
-        // Main Shopping Mall Building ("SPINLANE CITY MALL")
         const mallMain = new THREE.Mesh(new THREE.BoxGeometry(140, 45, 80), mallConcreteMat);
         mallMain.position.set(0, 22.5, -70);
         scene.add(mallMain);
@@ -415,7 +495,6 @@
         mallGlassFront.position.set(0, 16, -29);
         scene.add(mallGlassFront);
 
-        // Billboard / Banner "SPINLANE"
         const bannerCanvas = document.createElement('canvas');
         bannerCanvas.width = 512; bannerCanvas.height = 128;
         const bCtx = bannerCanvas.getContext('2d');
@@ -431,7 +510,6 @@
         billboard.position.set(0, 34, -28.5);
         scene.add(billboard);
 
-        // Glass Atrium Roof Skylights on Mall Roof
         const roofGlassMat = new THREE.MeshBasicMaterial({ color: 0x8ab6d6, transparent: true, opacity: 0.65 });
         for(let i = -1; i <= 1; i++) {
             const skylight = new THREE.Mesh(new THREE.BoxGeometry(25, 4, 35), roofGlassMat);
@@ -439,16 +517,12 @@
             scene.add(skylight);
         }
 
-        // Palm Trees & Planters Promenade (as seen in video)
         function createPalmTree(x, z) {
             const treeGroup = new THREE.Group();
-            
-            // Planter box
             const planter = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 4), mallDarkMat);
             planter.position.y = 1.5;
             treeGroup.add(planter);
 
-            // Trunk segments
             const trunkMat = new THREE.MeshBasicMaterial({ color: 0x5e4b3c });
             for(let s = 0; s < 7; s++) {
                 const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.5 - s*0.03, 0.6 - s*0.03, 1.8, 8), trunkMat);
@@ -456,7 +530,6 @@
                 treeGroup.add(ring);
             }
 
-            // Palm Fronds
             const frondMat = new THREE.MeshBasicMaterial({ color: 0x2e6b2e, side: THREE.DoubleSide });
             for(let f = 0; f < 6; f++) {
                 const frond = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.2), frondMat);
@@ -470,13 +543,11 @@
             scene.add(treeGroup);
         }
 
-        // Create promenade palm tree lines in front of mall parking
         for(let x = -45; x <= 45; x += 30) {
             createPalmTree(x, 0);
             createPalmTree(x, 25);
         }
 
-        // Street lights
         const poleMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
         function createStreetLight(x, z) {
             const lightGroup = new THREE.Group();
@@ -492,13 +563,11 @@
         createStreetLight(-60, 15);
         createStreetLight(60, 15);
         createStreetLight(-60, -10);
-        createSpeedLight = createStreetLight(60, -10);
+        createStreetLight(60, -10);
 
-        // Obstacles array for collision
         const obstacles = [];
-        obstacles.push({ minX: -70, maxX: 70, minZ: -110, maxZ: -30, minY: 0, maxY: 45 }); // Main Mall
+        obstacles.push({ minX: -70, maxX: 70, minZ: -110, maxZ: -30, minY: 0, maxY: 45 });
 
-        // Dust particle system
         const dustCount = 150;
         const dustGeo = new THREE.BufferGeometry();
         const dustPositions = new Float32Array(dustCount * 3);
@@ -529,7 +598,6 @@
         dustSystem.visible = false;
         scene.add(dustSystem);
 
-        // Drone shadow
         const shadowCanvas = document.createElement('canvas');
         shadowCanvas.width = 64; shadowCanvas.height = 64;
         const sCtx = shadowCanvas.getContext('2d');
@@ -544,7 +612,6 @@
         droneShadow.position.y = 0.02;
         scene.add(droneShadow);
 
-        // Cloud group
         const cloudGroup = new THREE.Group();
         const cloudCanvas = document.createElement('canvas');
         cloudCanvas.width = 128; cloudCanvas.height = 128;
@@ -563,7 +630,6 @@
         }
         scene.add(cloudGroup);
 
-        // Drone mesh (Volador style with pinkish props as seen in video)
         const droneGroup = new THREE.Group();
         const bodyMat = new THREE.MeshBasicMaterial({ color: 0x1c1e22 });
         const accentMat = new THREE.MeshBasicMaterial({ color: 0x2e323b });
@@ -634,7 +700,6 @@
         let isArmed = false;
         let gameStarted = false;
         let cinematicTime = 0;
-        let cinematicSlowdownFactor = 1.0;
         let tumbleRotationVelocity = new THREE.Vector3(0, 0, 0);
 
         let keys = { w: false, s: false, a: false, d: false, i: false, j: false, k: false, l: false, ' ': false };
@@ -659,6 +724,10 @@
 
         const motorBtn = document.getElementById('btn-motor-toggle');
         function toggleMotors() {
+            initAudio();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
             if (!isArmed) {
                 if (!MODES[activeMode].hasAutoLevel && currentThrottle > 0.05) return;
                 isArmed = true;
@@ -686,7 +755,11 @@
         function startGameSession() {
             if (gameStarted) return;
             
-            // Trigger black loading screen
+            initAudio();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
             loadingScreen.style.opacity = '1';
             setTimeout(() => {
                 gameStarted = true;
@@ -714,6 +787,10 @@
         });
 
         container.addEventListener('click', (e) => {
+            initAudio();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
             if (isMobile && gameStarted && inst.style.display === 'none') {
                 cycleFlightMode();
             } else if (!isMobile && gameStarted && inst.style.display !== 'flex' && document.pointerLockElement !== container) {
@@ -878,6 +955,8 @@
                         let overlapZ = Math.min(obs.maxZ - (pz - buffer), (pz + buffer) - obs.minZ);
                         let speedH = Math.sqrt(drone.velocity.x * drone.velocity.x + drone.velocity.z * drone.velocity.z);
 
+                        playCrashSound();
+
                         if (overlapX < overlapZ) {
                             drone.position.x += (px > (obs.minX + obs.maxX)/2) ? overlapX : -overlapX;
                             drone.velocity.x *= -0.4;
@@ -1010,6 +1089,9 @@
             handleCollisions();
             droneGroup.position.copy(drone.position);
             droneGroup.quaternion.copy(drone.rotation);
+
+            // Update Audio loop state based on throttle & speed
+            updateAudio(currentThrottle, drone.velocity.length());
 
             if (drone.position.y <= 1.0 && drone.velocity.length() > 2.0) {
                 dustSystem.visible = true;
