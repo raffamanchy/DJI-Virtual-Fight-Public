@@ -112,20 +112,21 @@
             background: #b0b0b0; transform: translateX(-50%); z-index: 1;
         }
 
-        /* Green Retro Joystick Dot */
+        /* Green Retro Joystick Dot with Dynamic Scale/Motion Stretch */
         .stick-ball {
             position: absolute; 
-            width: 14px; 
-            height: 14px; 
+            width: 15px; 
+            height: 15px; 
             background: #00ff00; 
             border: 2px solid #ffffff;
             border-radius: 50%;
             top: 50%; 
             left: 50%; 
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 4px rgba(0, 255, 0, 0.8); 
+            box-shadow: 0 0 6px rgba(0, 255, 0, 0.9); 
             z-index: 4;
             image-rendering: pixelated;
+            will-change: transform;
         }
 
         .hud-circle-btn {
@@ -293,7 +294,7 @@
         document.getElementById('wrapper-right').style.width = (90 * stickScale) + 'px';
         document.getElementById('wrapper-right').style.height = (90 * stickScale) + 'px';
 
-        const stickBallSize = 14 * stickScale;
+        const stickBallSize = 15 * stickScale;
         document.getElementById('stick-left').style.width = stickBallSize + 'px';
         document.getElementById('stick-left').style.height = stickBallSize + 'px';
         document.getElementById('stick-right').style.width = stickBallSize + 'px';
@@ -653,6 +654,10 @@
         let touchRightValX = 0, touchRightValY = 0;
         let stickyThrottleValue = 0.0; 
 
+        // Track previous stick positions for velocity/stretching effect
+        let prevLeftX = 0, prevLeftY = 0;
+        let prevRightX = 0, prevRightY = 0;
+
         const MOUSE_SENSITIVITY = 0.0025; 
         const THROTTLE_CHANGE_SPEED = 0.8; 
         const YAW_RATE = 3.5;
@@ -862,6 +867,7 @@
             drone.position.set(0, 0.3, 45); drone.velocity.set(0, 0, 0); drone.rotation.set(0, 0, 0, 1); drone.euler.set(0, 0, 0);
             currentThrottle = 0; stickyThrottleValue = 0; tumbleRotationVelocity.set(0, 0, 0);
             rawMouseX = 0; rawMouseY = 0; touchLeftValX = 0; touchLeftValY = 1.0; touchRightValX = 0; touchRightValY = 0;
+            prevLeftX = 0; prevLeftY = 0; prevRightX = 0; prevRightY = 0;
 
             const leftKnob = document.getElementById('touch-left-knob');
             if(leftKnob) {
@@ -1103,8 +1109,26 @@
                 rightY = Math.max(-maxPixelOffset, Math.min(maxPixelOffset, (rawMouseY + klPitchStick * 20) * 1.4));
             }
 
-            stickLeft.style.transform = `translate(calc(-50% + ${leftX}px), calc(-50% + ${leftY}px))`;
-            stickRight.style.transform = `translate(calc(-50% + ${rightX}px), calc(-50% + ${rightY}px))`;
+            // Calculate motion stretch & scaling based on stick speed / delta movement
+            const leftVelX = leftX - prevLeftX;
+            const leftVelY = leftY - prevLeftY;
+            const leftSpeed = Math.hypot(leftVelX, leftVelY);
+            const leftAngle = Math.atan2(leftVelY, leftVelX);
+            const leftScaleX = 1 + Math.min(1.8, leftSpeed * 0.4);
+            const leftScaleY = Math.max(0.6, 1 - leftSpeed * 0.15);
+
+            const rightVelX = rightX - prevRightX;
+            const rightVelY = rightY - prevRightY;
+            const rightSpeed = Math.hypot(rightVelX, rightVelY);
+            const rightAngle = Math.atan2(rightVelY, rightVelX);
+            const rightScaleX = 1 + Math.min(1.8, rightSpeed * 0.4);
+            const rightScaleY = Math.max(0.6, 1 - rightSpeed * 0.15);
+
+            prevLeftX = leftX; prevLeftY = leftY;
+            prevRightX = rightX; prevRightY = rightY;
+
+            stickLeft.style.transform = `translate(calc(-50% + ${leftX}px), calc(-50% + ${leftY}px)) rotate(${leftAngle}rad) scale(${leftScaleX}, ${leftScaleY})`;
+            stickRight.style.transform = `translate(calc(-50% + ${rightX}px), calc(-50% + ${rightY}px)) rotate(${rightAngle}rad) scale(${rightScaleX}, ${rightScaleY})`;
 
             renderer.render(scene, camera);
         }
