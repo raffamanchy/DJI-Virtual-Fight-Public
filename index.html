@@ -2,630 +2,1114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gorilla Tag 3D (Mobile & Desktop VR Sandbox)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>TRYP FPV</title>
+    <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/raffamanchy/TRYP-FPV/main/PNG.ico">
     <style>
-        body {
-            margin: 0;
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #6b5b45; font-family: consolas, sans-serif; position: fixed; }
+        
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; overflow: hidden; }
+        canvas { width: 100% !important; height: 100% !important; display: block; }
+        
+        /* MANUAL OSD - BOTTOM LEFT */
+        #manual-osd-container {
+            position: absolute;
+            bottom: 25px;
+            left: 25px;
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            pointer-events: none;
+        }
+        .osd-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .osd-badge {
+            background: rgba(25, 30, 40, 0.85);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: #ffffff;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        .osd-icon-box {
+            width: 34px;
+            height: 34px;
+            background: rgba(45, 52, 64, 0.9);
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+        }
+        .osd-speed-value {
+            font-size: 22px;
+            color: #ffb400;
+            font-family: 'Consolas', monospace;
+            min-width: 95px;
+            text-align: right;
+        }
+        .osd-unit {
+            font-size: 12px;
+            color: #cccccc;
+            font-weight: normal;
+        }
+
+        /* RC STICKS OVERLAY - RETRO PIXELATED FPV STYLE */
+        #rc-sticks-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 12;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        /* Bracket Box Container with Pixel Art Rendering */
+        .stick-box-wrapper {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            pointer-events: auto;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* Inner Box - Solid Black Background with Pixelated Rounded Border Effect */
+        .stick-box {
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            border: 3px solid #b0b0b0;
+            border-radius: 10px;
+            position: relative;
             overflow: hidden;
-            background-color: #0b1120;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
         }
-        #game-canvas {
-            width: 100vw;
-            height: 100vh;
-            display: block;
+
+        /* Horizontal & Vertical Crosshairs (White Pixel Lines) */
+        .stick-cross-h { 
+            position: absolute; top: 50%; left: 0; width: 100%; height: 2px; 
+            background: #b0b0b0; transform: translateY(-50%); z-index: 1;
         }
-        /* Mobile Touch Controls UI */
-        .mobile-ui {
-            display: none;
+        .stick-cross-v { 
+            position: absolute; top: 0; left: 50%; width: 2px; height: 100%; 
+            background: #b0b0b0; transform: translateX(-50%); z-index: 1;
         }
-        @media (pointer: coarse) {
-            .mobile-ui {
-                display: flex;
-            }
+
+        /* Green Retro Joystick Dot */
+        .stick-ball {
+            position: absolute; 
+            width: 14px; 
+            height: 14px; 
+            background: #00ff00; 
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px rgba(0, 255, 0, 0.8); 
+            z-index: 4;
+            image-rendering: pixelated;
+        }
+
+        .hud-circle-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(20, 25, 35, 0.85);
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        .hud-circle-btn:hover { background: rgba(40, 50, 70, 0.95); }
+
+        #touch-controls { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; z-index: 9; pointer-events: none; display: none; }
+        .touch-pad {
+            position: absolute; bottom: max(45px, env(safe-area-inset-bottom)); width: 150px; height: 150px;
+            background: rgba(255, 255, 255, 0.05); border: none;
+            border-radius: 50%; pointer-events: auto; touch-action: none;
+            opacity: 0.4;
+        }
+        #touch-left-pad { left: max(55px, env(safe-area-inset-left)); }
+        #touch-right-pad { right: max(55px, env(safe-area-inset-right)); }
+        .touch-knob {
+            position: absolute; top: 50%; left: 50%; width: 55px; height: 55px;
+            background: rgba(255, 255, 255, 0.5); border: none; border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        #top-action-bar {
+            position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(15px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 8px; z-index: 8; pointer-events: auto;
+            background: transparent;
+        }
+        .top-btn {
+            background: rgba(20, 25, 35, 0.85); color: #ffffff; border: 1.5px solid rgba(255, 255, 255, 0.2);
+            padding: 0 10px; height: 36px; border-radius: 6px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-size: 12px; font-weight: bold; font-family: consolas, sans-serif;
+        }
+        .top-btn:hover { background: rgba(40, 50, 70, 0.95); }
+
+        #top-menu-bar { 
+            position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(15px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 10px; z-index: 8; pointer-events: auto; 
+            background: transparent;
+        }
+
+        #instructions { 
+            position: absolute; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.35); backdrop-filter: blur(2px);
+            color: #ffffff; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; cursor: pointer; z-index: 20; 
+            transition: opacity 0.4s ease;
+        }
+        #menu-content { 
+            background: rgba(24, 34, 48, 0.85); padding: 30px 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); pointer-events: auto; max-width: 90%; 
+            animation: pulseGlow 3s infinite alternate;
+        }
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 0 10px rgba(255,235,59,0.1); }
+            100% { box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 0 25px rgba(255,235,59,0.3); }
+        }
+        h1 { margin-bottom: 12px; font-size: 26px; letter-spacing: 2px; color: #ffeb3b; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        p { font-size: 14px; color: #ddd; line-height: 1.5; }
+        .play-btn-pulse {
+            margin-top: 20px;
+            background: #ffeb3b;
+            color: #111;
+            border: none;
+            padding: 12px 30px;
+            font-weight: bold;
+            font-family: consolas;
+            font-size: 15px;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255,235,59,0.4);
+            transition: transform 0.2s, background 0.2s;
+        }
+        .play-btn-pulse:hover {
+            background: #fff176;
+            transform: scale(1.05);
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body class="relative overflow-hidden">
-    <canvas id="game-canvas"></canvas>
+<body>
 
-    <!-- Mobile Virtual Joystick (Left) -->
-    <div id="joystick-zone" class="mobile-ui absolute bottom-8 left-8 w-36 h-36 bg-slate-800/40 backdrop-blur-md rounded-full border border-slate-700/50 items-center justify-center z-10 touch-none">
-        <div id="joystick-handle" class="w-16 h-16 bg-amber-500/80 rounded-full shadow-lg transform transition-transform duration-75 pointer-events-none"></div>
-    </div>
+    <div id="canvas-container">
+        <!-- Manual OSD Overlay (Bottom Left) -->
+        <div id="manual-osd-container">
+            <div class="osd-row">
+                <div class="osd-badge" style="padding: 6px 12px;">
+                    <div class="osd-icon-box" style="width: 28px; height: 28px; font-size: 12px;">📐</div>
+                    <span id="osd-angle">25°</span>
+                </div>
+            </div>
+            <div class="osd-row">
+                <div class="osd-badge" style="padding: 6px 12px;">
+                    <div class="osd-icon-box" style="width: 28px; height: 28px; font-size: 12px;">⛰️</div>
+                    <span id="osd-alt">59.2m</span>
+                </div>
+            </div>
+            <div class="osd-row">
+                <div class="osd-badge">
+                    <div class="osd-icon-box">🧭</div>
+                    <div class="osd-speed-value"><span id="osd-speed">0.0</span> <span class="osd-unit">km/h</span></div>
+                </div>
+            </div>
+        </div>
 
-    <!-- Mobile Jump / Push Button (Right) -->
-    <div id="jump-btn" class="mobile-ui absolute bottom-10 right-10 w-24 h-24 bg-amber-500/90 active:bg-amber-400 backdrop-blur-md rounded-full border-2 border-amber-300/60 shadow-2xl items-center justify-center z-10 text-slate-950 font-black text-lg uppercase tracking-wider touch-none">
-        Jump
-    </div>
+        <div id="top-menu-bar"></div>
 
-    <!-- Start Overlay -->
-    <div id="start-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-20 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-300">
-        <div class="bg-slate-900 border-2 border-amber-500/60 p-8 rounded-3xl max-w-lg text-center shadow-2xl transform hover:scale-105 transition-all">
-            <div class="text-7xl mb-4 animate-bounce">🦧</div>
-            <h2 class="text-3xl font-extrabold text-amber-400 mb-2">VR FREESTYLE PARKOUR</h2>
-            <p class="text-slate-300 text-sm mb-5 leading-relaxed">
-                Pure gorilla parkour sandbox! Use <b class="text-amber-300">RDFG / Joystick</b> to move, look around with mouse/touch, and launch high into trees!
-            </p>
-            <div class="inline-block bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black px-8 py-3.5 rounded-xl uppercase tracking-wider shadow-xl hover:from-amber-400 hover:to-amber-500">
-                Click / Tap To Enter Sandbox
+        <div id="top-action-bar">
+            <button class="top-btn" id="btn-switch-view" title="Switch View">&#127916;</button>
+            <button class="top-btn" id="btn-retry" title="Reset">&#8634;</button>
+            <button class="top-btn" id="btn-pause" title="Pause">&#10074;&#10074;</button>
+        </div>
+
+        <!-- Retro Pixelated RC Stick Containers -->
+        <div id="rc-sticks-container">
+            <button id="btn-motor-toggle" class="hud-circle-btn" title="Toggle Motor">&#10074;&#10074;</button>
+            
+            <div class="stick-box-wrapper" id="wrapper-left">
+                <div class="stick-box" id="box-left">
+                    <div class="stick-cross-h"></div>
+                    <div class="stick-cross-v"></div>
+                    <div id="stick-left" class="stick-ball"></div>
+                </div>
+            </div>
+
+            <div class="stick-box-wrapper" id="wrapper-right">
+                <div class="stick-box" id="box-right">
+                    <div class="stick-cross-h"></div>
+                    <div class="stick-cross-v"></div>
+                    <div id="stick-right" class="stick-ball"></div>
+                </div>
+            </div>
+
+            <button id="btn-fullscreen-toggle" class="hud-circle-btn" title="Lock/Fullscreen">&#128274;</button>
+        </div>
+
+        <div id="touch-controls">
+            <div id="touch-left-pad" class="touch-pad"><div id="touch-left-knob" class="touch-knob"></div></div>
+            <div id="touch-right-pad" class="touch-pad"><div id="touch-right-knob" class="touch-knob"></div></div>
+        </div>
+
+        <div id="instructions">
+            <div id="menu-content">
+                <h1 id="menu-title">TRYP FPV</h1>
+                <p id="instruction-text"><b>Cinematic World Preview</b><br>Landscape Mode Recommended</p>              
+                <button class="play-btn-pulse" id="btn-start-game">PLAY</button>
             </div>
         </div>
     </div>
 
     <script>
-        const KEYS = { r: false, d: false, f: false, g: false, space: false, shift: false };
-        let isPointerLocked = false;
+        const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-        // Mobile Virtual Controls State
-        let mobileMoveDir = { x: 0, y: 0 };
-        let mobileJumpPressed = false;
+        const stickScale = isMobile ? 1.0 : 1.2; 
+        document.getElementById('wrapper-left').style.width = (90 * stickScale) + 'px';
+        document.getElementById('wrapper-left').style.height = (90 * stickScale) + 'px';
+        document.getElementById('wrapper-right').style.width = (90 * stickScale) + 'px';
+        document.getElementById('wrapper-right').style.height = (90 * stickScale) + 'px';
 
-        // Sound System
-        const AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playThumpSound(freq = 130, duration = 0.12) {
-            if (AudioCtx.state === 'suspended') AudioCtx.resume();
-            const osc = AudioCtx.createOscillator();
-            const gain = AudioCtx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, AudioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(30, AudioCtx.currentTime + duration);
-            gain.gain.setValueAtTime(0.4, AudioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, AudioCtx.currentTime + duration);
-            osc.connect(gain);
-            gain.connect(AudioCtx.destination);
-            osc.start();
-            osc.stop(AudioCtx.currentTime + duration);
+        const stickBallSize = 14 * stickScale;
+        document.getElementById('stick-left').style.width = stickBallSize + 'px';
+        document.getElementById('stick-left').style.height = stickBallSize + 'px';
+        document.getElementById('stick-right').style.width = stickBallSize + 'px';
+        document.getElementById('stick-right').style.height = stickBallSize + 'px';
+
+        if (isMobile) {
+            document.getElementById('touch-controls').style.display = 'block';
+            const instructionTextEl = document.getElementById('instruction-text');
+            if(instructionTextEl) {
+                instructionTextEl.innerHTML = `<b>Cinematic World Preview</b><br>Landscape Mode Recommended`;
+            }
+        } else {
+            document.getElementById('btn-motor-toggle').style.display = 'none';
+            document.getElementById('btn-fullscreen-toggle').style.display = 'none';
         }
 
-        function generateProceduralTextures() {
-            const cGround = document.createElement('canvas');
-            cGround.width = cGround.height = 512;
-            const ctxG = cGround.getContext('2d');
-            ctxG.fillStyle = '#224a1d';
-            ctxG.fillRect(0, 0, 512, 512);
-            for (let i = 0; i < 8000; i++) {
-                ctxG.fillStyle = Math.random() > 0.4 ? '#2d6126' : (Math.random() > 0.5 ? '#173613' : '#3d7a34');
-                ctxG.fillRect(Math.random() * 512, Math.random() * 512, 2, 5);
-            }
-            const groundTex = new THREE.CanvasTexture(cGround);
-            groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-            groundTex.repeat.set(50, 50);
-
-            const cBark = document.createElement('canvas');
-            cBark.width = cBark.height = 256;
-            const ctxB = cBark.getContext('2d');
-            ctxB.fillStyle = '#3b230d';
-            ctxB.fillRect(0, 0, 256, 256);
-            ctxB.fillStyle = '#241406';
-            for (let i = 0; i < 160; i++) {
-                ctxB.fillRect(Math.random() * 256, 0, Math.random() * 8 + 3, 256);
-            }
-            const barkTex = new THREE.CanvasTexture(cBark);
-            barkTex.wrapS = barkTex.wrapT = THREE.RepeatWrapping;
-            barkTex.repeat.set(1, 8);
-
-            const cFur = document.createElement('canvas');
-            cFur.width = cFur.height = 256;
-            const ctxF = cFur.getContext('2d');
-            ctxF.fillStyle = '#222326';
-            ctxF.fillRect(0, 0, 256, 256);
-            for (let i = 0; i < 2000; i++) {
-                ctxF.fillStyle = Math.random() > 0.5 ? '#141416' : '#35373d';
-                ctxF.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
-            }
-            const furTex = new THREE.CanvasTexture(cFur);
-
-            const cPalm = document.createElement('canvas');
-            cPalm.width = cPalm.height = 128;
-            const ctxP = cPalm.getContext('2d');
-            ctxP.fillStyle = '#1c1716';
-            ctxP.fillRect(0, 0, 128, 128);
-            for (let i = 0; i < 300; i++) {
-                ctxP.fillStyle = '#2a2321';
-                ctxP.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
-            }
-            const palmTex = new THREE.CanvasTexture(cPalm);
-
-            return { groundTex, barkTex, furTex, palmTex };
-        }
-
-        const textures = generateProceduralTextures();
-
-        const canvas = document.getElementById('game-canvas');
+        const container = document.getElementById('canvas-container');
+        const inst = document.getElementById('instructions');
+        
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x6ca6cd);
-        scene.fog = new THREE.FogExp2(0x6ca6cd, 0.006);
+        scene.background = new THREE.Color(0xa4caff);
+        scene.fog = new THREE.FogExp2(0xbcd6ff, 0.0012);
 
-        const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+        const camera = new THREE.PerspectiveCamera(130, window.innerWidth / window.innerHeight, 0.1, 4000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+        container.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(ambientLight);
+        function handleResize() {
+            const width = window.innerWidth || document.documentElement.clientWidth;
+            const height = window.innerHeight || document.documentElement.clientHeight;
+            
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            
+            renderer.setSize(width, height, true);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+        }
 
-        const dirLight = new THREE.DirectionalLight(0xfffaed, 1.0);
-        dirLight.position.set(120, 180, 80);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 400;
-        const d = 150;
-        dirLight.shadow.camera.left = -d;
-        dirLight.shadow.camera.right = d;
-        dirLight.shadow.camera.top = d;
-        dirLight.shadow.camera.bottom = -d;
-        scene.add(dirLight);
+        window.addEventListener('resize', handleResize);
+        
+        function triggerDelayedResize() {
+            handleResize();
+            setTimeout(handleResize, 100);
+            setTimeout(handleResize, 300);
+            setTimeout(handleResize, 500);
+        }
 
-        const world = new CANNON.World();
-        world.gravity.set(0, -28, 0);
-        world.broadphase = new CANNON.NaiveBroadphase();
-        world.solver.iterations = 10;
+        window.addEventListener('orientationchange', triggerDelayedResize);
+        if (screen.orientation && screen.orientation.addEventListener) {
+            screen.orientation.addEventListener('change', triggerDelayedResize);
+        }
+        setTimeout(handleResize, 100);
 
-        const physicsMaterials = {
-            ground: new CANNON.Material('ground'),
-            player: new CANNON.Material('player')
+        scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+        const skyLight = new THREE.DirectionalLight(0xfffae0, 0.6);
+        skyLight.position.set(200, 500, 100);
+        scene.add(skyLight);
+
+        const floorCanvas = document.createElement('canvas');
+        floorCanvas.width = 512; floorCanvas.height = 512;
+        const ctxFloor = floorCanvas.getContext('2d');
+        ctxFloor.fillStyle = '#6b5b45';
+        ctxFloor.fillRect(0, 0, 512, 512);
+        for(let i = 0; i < 3000; i++) {
+            ctxFloor.fillStyle = i % 2 === 0 ? '#594a35' : '#7d6d53';
+            ctxFloor.fillRect(Math.random() * 512, Math.random() * 512, 4, 4);
+        }
+        const floorTex = new THREE.CanvasTexture(floorCanvas);
+        floorTex.wrapS = THREE.RepeatWrapping; floorTex.wrapT = THREE.RepeatWrapping;
+        floorTex.repeat.set(300, 300);
+
+        const floorGeo = new THREE.PlaneGeometry(12000, 12000);
+        floorGeo.rotateX(-Math.PI / 2);
+        const floorMat = new THREE.MeshBasicMaterial({ map: floorTex });
+        scene.add(new THREE.Mesh(floorGeo, floorMat));
+
+        const grassMat = new THREE.MeshBasicMaterial({ color: 0x4a6b35, side: THREE.DoubleSide });
+        const grassGeo = new THREE.PlaneGeometry(0.6, 1.2);
+        grassGeo.translate(0, 0.6, 0);
+        const grassInstanced = new THREE.InstancedMesh(grassGeo, grassMat, 3000);
+        const dummy = new THREE.Object3D();
+        for (let i = 0; i < 3000; i++) {
+            const x = (Math.random() - 0.5) * 2000;
+            const z = (Math.random() - 0.5) * 2000;
+            if (Math.abs(x) < 50 && Math.abs(z) < 50) continue;
+            dummy.position.set(x, 0, z);
+            dummy.rotation.y = Math.random() * Math.PI;
+            dummy.scale.set(1 + Math.random() * 0.8, 0.8 + Math.random() * 1.0, 1 + Math.random() * 0.8);
+            dummy.updateMatrix();
+            grassInstanced.setMatrixAt(i, dummy.matrix);
+        }
+        scene.add(grassInstanced);
+
+        const waterCanvas = document.createElement('canvas');
+        waterCanvas.width = 256; waterCanvas.height = 256;
+        const ctxWater = waterCanvas.getContext('2d');
+        ctxWater.fillStyle = '#3a88c8';
+        ctxWater.fillRect(0, 0, 256, 256);
+        const waterMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(waterCanvas), transparent: true, opacity: 0.85 });
+        const waterPond = new THREE.Mesh(new THREE.PlaneGeometry(800, 1000), waterMat);
+        waterPond.rotation.x = -Math.PI / 2;
+        waterPond.position.set(400, 0.1, -300);
+        scene.add(waterPond);
+
+        const obstacles = [];
+        const cliffMat = new THREE.MeshBasicMaterial({ color: 0x4a433b });
+        for (let i = 0; i < 30; i++) {
+            const cliffW = 100 + Math.random() * 80;
+            const cliffH = 60 + Math.random() * 80;
+            const cliffMesh = new THREE.Mesh(new THREE.BoxGeometry(cliffW, cliffH, 180), cliffMat);
+            const cx = -600 + Math.random() * 1200;
+            const cz = -600 + Math.random() * 1200;
+            cliffMesh.position.set(cx, cliffH / 2 - 5, cz);
+            scene.add(cliffMesh);
+            obstacles.push({ minX: cliffMesh.position.x - cliffW/2, maxX: cliffMesh.position.x + cliffW/2, minZ: cliffMesh.position.z - 90, maxZ: cliffMesh.position.z + 90, minY: 0, maxY: cliffH });
+        }
+
+        const chimneyGroup = new THREE.Group();
+        const baseSegments = 12;
+        const totalHeight = 45;
+        for (let s = 0; s < baseSegments; s++) {
+            const segH = totalHeight / baseSegments;
+            const isRed = Math.floor(s / 2) % 2 === 0;
+            const segMat = new THREE.MeshBasicMaterial({ color: isRed ? 0xcc2222 : 0xdddddd });
+            const radius = 2.5 - (s * 0.04);
+            const segMesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius + 0.05, segH, 16), segMat);
+            segMesh.position.y = (s * segH) + (segH / 2);
+            chimneyGroup.add(segMesh);
+        }
+        chimneyGroup.position.set(0, 0, -30);
+        chimneyGroup.rotation.z = -0.15;
+        chimneyGroup.rotation.x = 0.05;
+        scene.add(chimneyGroup);
+        obstacles.push({ minX: -3, maxX: 3, minZ: -33, maxZ: -27, minY: 0, maxY: totalHeight });
+
+        const concreteMat = new THREE.MeshBasicMaterial({ color: 0x6e7a8a });
+        const darkMetalMat = new THREE.MeshBasicMaterial({ color: 0x333b47 });
+        const rustMat = new THREE.MeshBasicMaterial({ color: 0x8a4526 });
+
+        function createIndustrialBuilding(x, z, w, h, d) {
+            const bMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), concreteMat);
+            bMesh.position.set(x, h / 2, z);
+            scene.add(bMesh);
+            obstacles.push({ minX: x - w/2, maxX: x + w/2, minZ: z - d/2, maxZ: z + d/2, minY: 0, maxY: h });
+        }
+
+        function createDiveBuilding(x, z, w, h, d) {
+            const towerMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), darkMetalMat);
+            towerMesh.position.set(x, h / 2, z);
+            scene.add(towerMesh);
+            obstacles.push({ minX: x - w/2, maxX: x + w/2, minZ: z - d/2, maxZ: z + d/2, minY: 0, maxY: h });
+            
+            const roofAcc = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, 15, d * 0.6), rustMat);
+            roofAcc.position.set(x, h + 7.5, z);
+            scene.add(roofAcc);
+            obstacles.push({ minX: x - (w*0.6)/2, maxX: x + (w*0.6)/2, minZ: z - (d*0.6)/2, maxZ: z + (d*0.6)/2, minY: h, maxY: h + 15 });
+        }
+
+        for (let i = 0; i < 40; i++) {
+            const bx = (Math.random() - 0.5) * 1800;
+            const bz = (Math.random() - 0.5) * 1800;
+            if (Math.abs(bx) < 60 && Math.abs(bz) < 60) continue;
+            createIndustrialBuilding(bx, bz, 20 + Math.random() * 30, 25 + Math.random() * 40, 20 + Math.random() * 30);
+        }
+
+        createDiveBuilding(150, -200, 30, 180, 30);
+        createDiveBuilding(-200, -250, 25, 220, 25);
+        createDiveBuilding(300, 180, 35, 150, 35);
+        createDiveBuilding(-250, 220, 28, 200, 28);
+        createDiveBuilding(0, -350, 40, 250, 40);
+
+        const bandoMaterial = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+        const bandoGlowMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+
+        function createBando(x, y, z, rotY = 0) {
+            const bandoGroup = new THREE.Group();
+            
+            const gateGeo = new THREE.TorusGeometry(6, 0.6, 16, 32);
+            const gateMesh = new THREE.Mesh(gateGeo, bandoMaterial);
+            bandoGroup.add(gateMesh);
+
+            const innerGeo = new THREE.TorusGeometry(5.8, 0.2, 16, 32);
+            const innerMesh = new THREE.Mesh(innerGeo, bandoGlowMat);
+            bandoGroup.add(innerMesh);
+
+            const standGeo = new THREE.CylinderGeometry(0.3, 0.3, y, 8);
+            const standMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+            
+            const standLeft = new THREE.Mesh(standGeo, standMat);
+            standLeft.position.set(-5.5, -y/2, 0);
+            bandoGroup.add(standLeft);
+
+            const standRight = new THREE.Mesh(standGeo, standMat);
+            standRight.position.set(5.5, -y/2, 0);
+            bandoGroup.add(standRight);
+
+            bandoGroup.position.set(x, y, z);
+            bandoGroup.rotation.y = rotY;
+            scene.add(bandoGroup);
+
+            obstacles.push({ minX: x - 6.5, maxX: x - 4.5, minZ: z - 0.8, maxZ: z + 0.8, minY: 0, maxY: y });
+            obstacles.push({ minX: x + 4.5, maxX: x + 6.5, minZ: z - 0.8, maxZ: z + 0.8, minY: 0, maxY: y });
+        }
+
+        createBando(0, 8, 15, 0);
+        createBando(0, 14, -60, 0);
+        createBando(40, 20, -120, Math.PI / 4);
+        createBando(-40, 12, -180, -Math.PI / 4);
+        createBando(150, 40, -200, Math.PI / 2);
+        createBando(-200, 50, -250, -Math.PI / 2);
+        createBando(0, 60, -320, 0);
+        createBando(100, 25, 100, Math.PI / 3);
+        createBando(-120, 30, 150, -Math.PI / 3);
+
+        const dustCount = 150;
+        const dustGeo = new THREE.BufferGeometry();
+        const dustPositions = new Float32Array(dustCount * 3);
+        for(let i = 0; i < dustCount * 3; i += 3) {
+            dustPositions[i] = (Math.random() - 0.5) * 10;
+            dustPositions[i+1] = Math.random() * 0.5;
+            dustPositions[i+2] = (Math.random() - 0.5) * 10;
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+
+        const dustCanvas = document.createElement('canvas');
+        dustCanvas.width = 32; dustCanvas.height = 32;
+        const dCtx = dustCanvas.getContext('2d');
+        const dGrad = dCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+        dGrad.addColorStop(0, 'rgba(210, 180, 140, 0.8)');
+        dGrad.addColorStop(1, 'rgba(210, 180, 140, 0)');
+        dCtx.fillStyle = dGrad; dCtx.fillRect(0, 0, 32, 32);
+
+        const dustMat = new THREE.PointsMaterial({
+            size: 0.8,
+            map: new THREE.CanvasTexture(dustCanvas),
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const dustSystem = new THREE.Points(dustGeo, dustMat);
+        dustSystem.visible = false;
+        scene.add(dustSystem);
+
+        const shadowCanvas = document.createElement('canvas');
+        shadowCanvas.width = 64; shadowCanvas.height = 64;
+        const sCtx = shadowCanvas.getContext('2d');
+        const sGrad = sCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+        sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        sCtx.fillStyle = sGrad; sCtx.fillRect(0, 0, 64, 64);
+        
+        const droneShadowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false });
+        const droneShadow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), droneShadowMat);
+        droneShadow.rotation.x = -Math.PI / 2;
+        droneShadow.position.y = 0.02;
+        scene.add(droneShadow);
+
+        const cloudGroup = new THREE.Group();
+        const cloudCanvas = document.createElement('canvas');
+        cloudCanvas.width = 128; cloudCanvas.height = 128;
+        const ctxCloud = cloudCanvas.getContext('2d');
+        let grad = ctxCloud.createRadialGradient(64,64,10, 64,64,55);
+        grad.addColorStop(0, 'rgba(255,255,255,0.85)');
+        grad.addColorStop(0.4, 'rgba(240,245,255,0.6)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctxCloud.fillStyle = grad; ctxCloud.fillRect(0,0,128,128);
+        const cloudSpriteMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cloudCanvas), transparent: true, opacity: 0.6 });
+        for(let c=0; c<65; c++) {
+            const sprite = new THREE.Sprite(cloudSpriteMat);
+            sprite.position.set((Math.random()-0.5)*3000, 180 + Math.random()*120, (Math.random()-0.5)*3000);
+            sprite.scale.set(150 + Math.random()*120, 60 + Math.random()*50, 1);
+            cloudGroup.add(sprite);
+        }
+        scene.add(cloudGroup);
+
+        const droneGroup = new THREE.Group();
+        const bodyMat = new THREE.MeshBasicMaterial({ color: 0x1c1e22 });
+        const accentMat = new THREE.MeshBasicMaterial({ color: 0x2e323b });
+        const frameArmMat = new THREE.MeshBasicMaterial({ color: 0x111317 });
+        const motorMat = new THREE.MeshBasicMaterial({ color: 0x08090b });
+        const glassLensMat = new THREE.MeshBasicMaterial({ color: 0x112244 });
+        const goproBodyMat = new THREE.MeshBasicMaterial({ color: 0x08090b });
+        const goproLensMat = new THREE.MeshBasicMaterial({ color: 0x16283d });
+
+        droneGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.35, 1.6), bodyMat));
+        const topPlate = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.1, 0.9), accentMat);
+        topPlate.position.y = 0.22;
+        droneGroup.add(topPlate);
+        const gopro = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.24, 0.3), goproBodyMat);
+        gopro.position.set(0, 0.39, 0.2);
+        droneGroup.add(gopro);
+        const goproLens = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 16), goproLensMat);
+        goproLens.rotation.x = Math.PI / 2;
+        goproLens.position.set(0, 0.39, 0.375);
+        droneGroup.add(goproLens);
+        const propMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false });
+        const propMeshes = [];
+        const motorPositions = [{ x: 1.25, z: 0.85 }, { x: -1.25, z: 0.85 }, { x: 1.25, z: -0.85 }, { x: -1.25, z: -0.85 }];
+
+        motorPositions.forEach(pos => {
+            const armLength = Math.hypot(pos.x, pos.z);
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(armLength, 0.12, 0.2), frameArmMat);
+            arm.position.set(pos.x / 2, 0, pos.z / 2);
+            arm.rotation.y = -Math.atan2(pos.z, pos.x);
+            droneGroup.add(arm);
+
+            const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.16, 12), motorMat);
+            motor.position.set(pos.x, 0.06, pos.z);
+            droneGroup.add(motor);
+
+            const prop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.03, 0.18), propMat);
+            prop.position.set(pos.x, 0.12, pos.z);
+            prop.userData.baseX = pos.x;
+            droneGroup.add(prop);
+            propMeshes.push(prop);
+        });
+
+        const gimbalHousing = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 0.45), accentMat);
+        gimbalHousing.position.set(0, -0.05, 0.95);
+        droneGroup.add(gimbalHousing);
+
+        const cameraLens = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.1, 16), glassLensMat);
+        cameraLens.rotation.x = Math.PI / 2;
+        cameraLens.position.set(0, -0.05, 1.2);
+        droneGroup.add(cameraLens);
+        scene.add(droneGroup);
+
+        const drone = {
+            position: new THREE.Vector3(0, 0.3, 45), 
+            velocity: new THREE.Vector3(0, 0, 0),
+            rotation: new THREE.Quaternion(),
+            euler: new THREE.Euler(0, 0, 0, 'YXZ')
         };
 
-        const contactMaterial = new CANNON.ContactMaterial(
-            physicsMaterials.ground,
-            physicsMaterials.player,
-            { friction: 0.9, restitution: 0.15 }
-        );
-        world.addContactMaterial(contactMaterial);
+        const MODES = {
+            1: { name: "NORMAL", maxThrust: 14.0, drag: 0.040, hasAutoLevel: true, maxAngle: 0.5 },
+            2: { name: "SPORT",  maxThrust: 21.0, drag: 0.025, hasAutoLevel: true, maxAngle: 0.8 },
+            3: { name: "MANUAL", maxThrust: 25.5, drag: 0.009, hasAutoLevel: false }
+        };
+        let activeMode = 1;
+        let cameraMode = "FPV";
+        let isArmed = false;
+        let gameStarted = false;
+        let cinematicTime = 0;
+        let cinematicSlowdownFactor = 1.0;
+        let tumbleRotationVelocity = new THREE.Vector3(0, 0, 0);
 
-        const groundSize = 300;
-        const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, 32, 32);
-        const groundMat = new THREE.MeshStandardMaterial({
-            map: textures.groundTex,
-            roughness: 0.9,
-            metalness: 0.05
-        });
-        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
-        groundMesh.rotation.x = -Math.PI / 2;
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
+        let keys = { w: false, s: false, a: false, d: false, i: false, j: false, k: false, l: false, ' ': false };
+        let mousePitch = 0, mouseRoll = 0;
+        let rawMouseX = 0, rawMouseY = 0;
 
-        const groundShape = new CANNON.Plane();
-        const groundBody = new CANNON.Body({ mass: 0, material: physicsMaterials.ground });
-        groundBody.addShape(groundShape);
-        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-        world.addBody(groundBody);
+        let touchLeftValX = 0, touchLeftValY = 1.0; 
+        let touchRightValX = 0, touchRightValY = 0;
+        let stickyThrottleValue = 0.0; 
 
-        const wallMat = new THREE.MeshStandardMaterial({ map: textures.barkTex, roughness: 0.8 });
-        function createWall(x, z, w, h, d) {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
-            mesh.position.set(x, h / 2, z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
+        const MOUSE_SENSITIVITY = 0.0025; 
+        const THROTTLE_CHANGE_SPEED = 0.8; 
+        const YAW_RATE = 3.5;
+        const GRAVITY = 9.81;
+        const CAMERA_UPTILT = 30 * (Math.PI / 180);
+        let currentThrottle = 0;
 
-            const shape = new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2));
-            const body = new CANNON.Body({ mass: 0, material: physicsMaterials.ground });
-            body.addShape(shape);
-            body.position.set(x, h / 2, z);
-            world.addBody(body);
+        function cycleFlightMode() {
+            activeMode = (activeMode % 3) + 1;
         }
-        const wallHeight = 50;
-        createWall(0, -groundSize / 2, groundSize, wallHeight, 4);
-        createWall(0, groundSize / 2, groundSize, wallHeight, 4);
-        createWall(-groundSize / 2, 0, 4, wallHeight, groundSize);
-        createWall(groundSize / 2, 0, 4, wallHeight, groundSize);
 
-        const treeLeavesGeo = new THREE.ConeGeometry(10, 18, 8);
-        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x226b2b, roughness: 0.6 });
+        const motorBtn = document.getElementById('btn-motor-toggle');
+        function toggleMotors() {
+            if (!isArmed) {
+                if (!MODES[activeMode].hasAutoLevel && currentThrottle > 0.05) return;
+                isArmed = true;
+            } else {
+                isArmed = false;
+                currentThrottle = 0;
+                stickyThrottleValue = 0;
+            }
+        }
+        motorBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleMotors(); });
 
-        function spawnTree(x, z, heightScale = 1) {
-            const group = new THREE.Group();
-            const trunkHeight = 26 * heightScale;
-            const trunkRadiusTop = 1.6 * heightScale;
-            const trunkRadiusBottom = 2.8 * heightScale;
+        const fullscreenBtn = document.getElementById('btn-fullscreen-toggle');
+        fullscreenBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) elem.requestFullscreen().catch(() => {});
+                else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        });
 
-            const trunkGeo = new THREE.CylinderGeometry(trunkRadiusTop, trunkRadiusBottom, trunkHeight, 10);
-            const trunk = new THREE.Mesh(trunkGeo, wallMat);
-            trunk.position.y = trunkHeight / 2;
-            trunk.castShadow = true;
-            trunk.receiveShadow = true;
-            group.add(trunk);
-
-            const leaves1 = new THREE.Mesh(treeLeavesGeo, leavesMat);
-            leaves1.position.y = trunkHeight - 2;
-            leaves1.scale.set(1.3 * heightScale, 1.2 * heightScale, 1.3 * heightScale);
-            leaves1.castShadow = true;
-            group.add(leaves1);
-
-            const leaves2 = new THREE.Mesh(treeLeavesGeo, leavesMat);
-            leaves2.position.y = trunkHeight + 6;
-            leaves2.scale.set(1.0 * heightScale, 1.0 * heightScale, 1.0 * heightScale);
-            leaves2.castShadow = true;
-            group.add(leaves2);
-
-            const numBranches = 6;
-            for (let i = 0; i < numBranches; i++) {
-                const branchWidth = 8.0 * heightScale;
-                const branchHeight = 0.7;
-                const branchDepth = 2.4;
-                const branch = new THREE.Mesh(new THREE.BoxGeometry(branchWidth, branchHeight, branchDepth), wallMat);
-                const angle = (i * Math.PI * 2) / 3.8 + Math.random() * 0.3;
-                const branchY = 7 + i * (trunkHeight * 0.15);
-
-                branch.position.set(Math.cos(angle) * (branchWidth * 0.45), branchY, Math.sin(angle) * (branchWidth * 0.45));
-                branch.rotation.y = -angle;
-                branch.castShadow = true;
-                branch.receiveShadow = true;
-                group.add(branch);
-
-                const bShape = new CANNON.Box(new CANNON.Vec3(branchWidth / 2, branchHeight / 2, branchDepth / 2));
-                const bBody = new CANNON.Body({ mass: 0, material: physicsMaterials.ground });
-                bBody.addShape(bShape);
-                bBody.position.set(x + branch.position.x, branchY, z + branch.position.z);
-                bBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
-                world.addBody(bBody);
+        function startGameSession() {
+            if (!gameStarted) {
+                gameStarted = true;
+                document.getElementById('menu-title').innerText = "TRYP FPV";
+                const instructionTextEl = document.getElementById('instruction-text');
+                if(instructionTextEl) {
+                    instructionTextEl.innerHTML = `<b>Ready to Fly</b><br>Controls: W/S (Throttle), A/D (Yaw)<br>Mouse or I/J/K/L (Pitch/Roll)`;
+                }
+                document.getElementById('btn-start-game').innerText = "RESUME";
+            }
+            
+            inst.style.opacity = '0';
+            setTimeout(() => { inst.style.display = 'none'; }, 400);
+            
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
             }
 
-            group.position.set(x, 0, z);
-            scene.add(group);
-
-            const trunkShape = new CANNON.Cylinder(trunkRadiusBottom, trunkRadiusBottom, trunkHeight, 10);
-            const trunkBody = new CANNON.Body({ mass: 0, material: physicsMaterials.ground });
-            trunkBody.addShape(trunkShape);
-            trunkBody.position.set(x, trunkHeight / 2, z);
-            world.addBody(trunkBody);
+            if (!isMobile) {
+                container.requestPointerLock();
+            }
+            
+            triggerDelayedResize();
         }
 
-        function createParkourPlatform(x, y, z, w, h, d, color = 0x8b5a2b) {
-            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-            mesh.position.set(x, y, z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-
-            const shape = new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2));
-            const body = new CANNON.Body({ mass: 0, material: physicsMaterials.ground });
-            body.addShape(shape);
-            body.position.set(x, y, z);
-            world.addBody(body);
-        }
-
-        const treePositions = [
-            [-45, -45, 1.5], [45, -35, 1.6], [-55, 50, 1.4], [58, 45, 1.7],
-            [0, -65, 1.8], [0, 60, 1.5], [-80, -15, 1.6], [80, 25, 1.7],
-            [-35, 90, 1.3], [38, -90, 1.4], [-95, -80, 1.9], [95, 80, 1.8]
-        ];
-        treePositions.forEach(pos => spawnTree(pos[0], pos[1], pos[2]));
-        spawnTree(0, 0, 2.5);
-
-        createParkourPlatform(20, 4, 15, 12, 8, 12, 0x9b6b3b);
-        createParkourPlatform(35, 9, 25, 10, 18, 10, 0x8a5a2b);
-        createParkourPlatform(50, 15, 35, 12, 30, 12, 0x7a4a1b);
-        createParkourPlatform(-25, 3, -15, 14, 1.5, 8, 0xa57545);
-        createParkourPlatform(-40, 7, -25, 14, 1.5, 8, 0xa57545);
-
-        const furMaterial = new THREE.MeshStandardMaterial({ map: textures.furTex, roughness: 0.85 });
-        const palmMaterial = new THREE.MeshStandardMaterial({ map: textures.palmTex, roughness: 0.6 });
-
-        function createRealisticHand(isRight = false) {
-            const handGroup = new THREE.Group();
-
-            const palmGeo = new THREE.BoxGeometry(0.38, 0.14, 0.45);
-            const palmMesh = new THREE.Mesh(palmGeo, palmMaterial);
-            palmMesh.castShadow = true;
-            handGroup.add(palmMesh);
-
-            const backFurGeo = new THREE.BoxGeometry(0.40, 0.08, 0.47);
-            const backFurMesh = new THREE.Mesh(backFurGeo, furMaterial);
-            backFurMesh.position.set(0, 0.06, 0);
-            backFurMesh.castShadow = true;
-            handGroup.add(backFurMesh);
-
-            const armGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.6, 10);
-            const armMesh = new THREE.Mesh(armGeo, furMaterial);
-            armMesh.rotation.x = Math.PI / 2;
-            armMesh.position.set(0, 0.05, 0.4);
-            armMesh.castShadow = true;
-            handGroup.add(armMesh);
-
-            const fingerPositionsX = [-0.13, -0.04, 0.05, 0.14];
-            fingerPositionsX.forEach((fX) => {
-                const fingerGroup = new THREE.Group();
-                const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.16), palmMaterial);
-                seg1.position.z = -0.08;
-                seg1.castShadow = true;
-                fingerGroup.add(seg1);
-
-                const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.065, 0.14), palmMaterial);
-                seg2.position.set(0, -0.03, -0.21);
-                seg2.rotation.x = 0.35;
-                seg2.castShadow = true;
-                fingerGroup.add(seg2);
-
-                fingerGroup.position.set(fX, -0.02, -0.22);
-                handGroup.add(fingerGroup);
-            });
-
-            const thumbGroup = new THREE.Group();
-            const thumbSeg1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.18), palmMaterial);
-            thumbSeg1.position.z = -0.09;
-            thumbGroup.add(thumbSeg1);
-
-            const sideSign = isRight ? 1 : -1;
-            thumbGroup.position.set(sideSign * 0.22, -0.02, -0.05);
-            thumbGroup.rotation.y = sideSign * -0.75;
-            thumbGroup.rotation.x = 0.2;
-            handGroup.add(thumbGroup);
-
-            handGroup.scale.set(1.15, 1.15, 1.15);
-            return handGroup;
-        }
-
-        const leftHandMesh = createRealisticHand(false);
-        const rightHandMesh = createRealisticHand(true);
-        scene.add(leftHandMesh);
-        scene.add(rightHandMesh);
-
-        const playerRadius = 1.25;
-        const playerShape = new CANNON.Sphere(playerRadius);
-        const playerBody = new CANNON.Body({
-            mass: 65,
-            material: physicsMaterials.player,
-            linearDamping: 0.15,
-            fixedRotation: true
+        document.getElementById('btn-start-game').addEventListener('click', (e) => {
+            e.stopPropagation();
+            startGameSession();
         });
-        playerBody.addShape(playerShape);
-        playerBody.position.set(0, 5, 20);
-        world.addBody(playerBody);
 
-        let pitch = 0;
-        let yaw = 0;
+        inst.addEventListener('click', (e) => {
+            startGameSession();
+        });
 
-        // Desktop keyboard controls
+        container.addEventListener('click', (e) => {
+            if (isMobile && gameStarted && inst.style.display === 'none') {
+                cycleFlightMode();
+            } else if (!isMobile && gameStarted && inst.style.display !== 'flex' && document.pointerLockElement !== container) {
+                container.requestPointerLock();
+            }
+        });
+
+        document.addEventListener('pointerlockchange', () => { 
+            if (!isMobile && gameStarted) {
+                const isLocked = (document.pointerLockElement === container);
+                if (!isLocked) {
+                    inst.style.display = 'flex';
+                    inst.style.opacity = '1';
+                    rawMouseX = 0; 
+                    rawMouseY = 0;
+                }
+            }
+        });
+
         document.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if (key === 'r') KEYS.r = true;
-            if (key === 'd') KEYS.d = true;
-            if (key === 'f') KEYS.f = true;
-            if (key === 'g') KEYS.g = true;
-            if (e.code === 'Space') KEYS.space = true;
-            if (e.shiftKey) KEYS.shift = true;
+            const k = e.key.toLowerCase();
+            if (!gameStarted) return;
+            if (k === 'm') { toggleMotors(); return; }
+            if (['1','2','3'].includes(k)) { 
+                activeMode = parseInt(k); 
+                return; 
+            }
+            if (k === 'c') { cameraMode = (cameraMode === "FPV") ? "TPV" : "FPV"; return; }
+            if (k in keys) keys[k] = true;
+            if (k === 'r') resetDrone();
         });
 
         document.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            if (key === 'r') KEYS.r = false;
-            if (key === 'd') KEYS.d = false;
-            if (key === 'f') KEYS.f = false;
-            if (key === 'g') KEYS.g = false;
-            if (e.code === 'Space') KEYS.space = false;
-            if (!e.shiftKey) KEYS.shift = false;
+            const k = e.key.toLowerCase();
+            if (!gameStarted) return;
+            if (k in keys) keys[k] = false;
         });
 
-        const overlay = document.getElementById('start-overlay');
-        overlay.addEventListener('click', () => {
-            if (!window.matchMedia('(pointer: coarse)').matches) {
-                canvas.requestPointerLock();
-            }
-            overlay.classList.add('opacity-0', 'pointer-events-none');
-        });
-
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === canvas) {
-                isPointerLocked = true;
-                overlay.classList.add('opacity-0', 'pointer-events-none');
-            } else {
-                isPointerLocked = false;
-                overlay.classList.remove('opacity-0', 'pointer-events-none');
-            }
-        });
-
-        // Mouse Look
         document.addEventListener('mousemove', (e) => {
-            if (!isPointerLocked && !window.matchMedia('(pointer: coarse)').matches) return;
-            const sensitivity = 0.0028;
-            yaw -= e.movementX * sensitivity;
-            pitch -= e.movementY * sensitivity;
-            pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, pitch));
+            if (!gameStarted || isMobile || document.pointerLockElement !== container) return;
+            mousePitch = -e.movementY * MOUSE_SENSITIVITY;
+            mouseRoll = e.movementX * MOUSE_SENSITIVITY;
+            rawMouseX += e.movementX * 0.4;
+            rawMouseY += e.movementY * 0.4;
+            rawMouseX = Math.max(-28, Math.min(28, rawMouseX));
+            rawMouseY = Math.max(-28, Math.min(28, rawMouseY));
         });
 
-        // Mobile Touch Look & Joystick logic
-        let touchLookId = null;
-        let lastTouchX = 0, lastTouchY = 0;
-        let joystickTouchId = null;
-        let joystickCenter = { x: 0, y: 0 };
+        function setupTouchJoystick(padId, knobId, callback, isStickyY = false) {
+            const pad = document.getElementById(padId);
+            const knob = document.getElementById(knobId);
+            const maxDist = 47.5;
+            let activeTouchId = null;
 
-        window.addEventListener('touchstart', (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const t = e.changedTouches[i];
-                if (t.clientX < window.innerWidth / 2 && joystickTouchId === null) {
-                    joystickTouchId = t.identifier;
-                    joystickCenter = { x: t.clientX, y: t.clientY };
-                } 
-                else if (t.clientX >= window.innerWidth / 2 && touchLookId === null) {
-                    touchLookId = t.identifier;
-                    lastTouchX = t.clientX;
-                    lastTouchY = t.clientY;
+            pad.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (activeTouchId === null) {
+                    const touch = e.changedTouches[0];
+                    activeTouchId = touch.identifier;
+                    updateStick(touch);
+                }
+            }, { passive: false });
+
+            pad.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.identifier === activeTouchId) updateStick(touch);
+                }
+            }, { passive: false });
+
+            function endTouch(e) {
+                e.stopPropagation();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === activeTouchId) {
+                        activeTouchId = null;
+                        if (!isStickyY) {
+                            knob.style.transform = `translate(-50%, -50%)`;
+                            callback(0, 0);
+                        } else {
+                            const currentDy = parseFloat(knob.dataset.dy || 47.5);
+                            knob.style.transform = `translate(-50%, calc(-50% + ${currentDy}px))`;
+                            callback(0, null);
+                        }
+                    }
                 }
             }
-        });
+            pad.addEventListener('touchend', endTouch);
+            pad.addEventListener('touchcancel', endTouch);
 
-        window.addEventListener('touchmove', (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const t = e.changedTouches[i];
-                if (t.identifier === joystickTouchId) {
-                    const dx = t.clientX - joystickCenter.x;
-                    const dy = t.clientY - joystickCenter.y;
-                    const dist = Math.min(50, Math.sqrt(dx * dx + dy * dy));
-                    const angle = Math.atan2(dy, dx);
-                    
-                    mobileMoveDir.x = (Math.cos(angle) * dist) / 50;
-                    mobileMoveDir.y = -(Math.sin(angle) * dist) / 50;
-
-                    const handle = document.getElementById('joystick-handle');
-                    handle.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
-                } else if (t.identifier === touchLookId) {
-                    const movementX = t.clientX - lastTouchX;
-                    const movementY = t.clientY - lastTouchY;
-                    lastTouchX = t.clientX;
-                    lastTouchY = t.clientY;
-
-                    const sensitivity = 0.004;
-                    yaw -= movementX * sensitivity;
-                    pitch -= movementY * sensitivity;
-                    pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, pitch));
+            function updateStick(touch) {
+                const rect = pad.getBoundingClientRect();
+                let dx = touch.clientX - (rect.left + rect.width / 2);
+                let dy = touch.clientY - (rect.top + rect.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > maxDist) { dx = (dx / dist) * maxDist; dy = (dy / dist) * maxDist; }
+                
+                if (isStickyY) {
+                    knob.dataset.dy = dy;
                 }
+
+                knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                callback(dx / maxDist, dy / maxDist);
             }
-        });
-
-        window.addEventListener('touchend', (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const t = e.changedTouches[i];
-                if (t.identifier === joystickTouchId) {
-                    joystickTouchId = null;
-                    mobileMoveDir = { x: 0, y: 0 };
-                    document.getElementById('joystick-handle').style.transform = `translate(0px, 0px)`;
-                }
-                if (t.identifier === touchLookId) {
-                    touchLookId = null;
-                }
-            }
-        });
-
-        // Mobile Jump Button Event
-        const jumpBtn = document.getElementById('jump-btn');
-        jumpBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            mobileJumpPressed = true;
-        });
-        jumpBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            mobileJumpPressed = false;
-        });
-
-        function isGrounded() {
-            const ray = new THREE.Raycaster(
-                new THREE.Vector3().copy(playerBody.position),
-                new THREE.Vector3(0, -1, 0),
-                0,
-                playerRadius + 0.45
-            );
-            const intersects = ray.intersectObjects(scene.children, true);
-            return intersects.length > 0;
         }
 
-        let handBob = 0;
-        let headShakeTime = 0;
+        if (isMobile) {
+            const leftKnob = document.getElementById('touch-left-knob');
+            if (leftKnob) {
+                leftKnob.style.transform = `translate(-50%, calc(-50% + 47.5px))`;
+                leftKnob.dataset.dy = 47.5;
+            }
+            setupTouchJoystick('touch-left-pad', 'touch-left-knob', (x, y) => { 
+                touchLeftValX = x; 
+                if (y !== null) touchLeftValY = y; 
+            }, true);
+            setupTouchJoystick('touch-right-pad', 'touch-right-knob', (x, y) => { 
+                touchRightValX = x; 
+                touchRightValY = y; 
+            }, false);
+        }
+
+        document.getElementById('btn-switch-view').addEventListener('click', (e) => { e.stopPropagation(); if(gameStarted) cameraMode = (cameraMode === "FPV") ? "TPV" : "FPV"; });
+        document.getElementById('btn-retry').addEventListener('click', (e) => { e.stopPropagation(); resetDrone(); });
+        document.getElementById('btn-pause').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!isMobile) document.exitPointerLock();
+            inst.style.display = 'flex';
+            inst.style.opacity = '1';
+        });
+
+        function resetDrone() {
+            drone.position.set(0, 0.3, 45); drone.velocity.set(0, 0, 0); drone.rotation.set(0, 0, 0, 1); drone.euler.set(0, 0, 0);
+            currentThrottle = 0; stickyThrottleValue = 0; tumbleRotationVelocity.set(0, 0, 0);
+            rawMouseX = 0; rawMouseY = 0; touchLeftValX = 0; touchLeftValY = 1.0; touchRightValX = 0; touchRightValY = 0;
+
+            const leftKnob = document.getElementById('touch-left-knob');
+            if(leftKnob) {
+                leftKnob.style.transform = 'translate(-50%, calc(-50% + 47.5px))';
+                leftKnob.dataset.dy = 47.5;
+            }
+            const rightKnob = document.getElementById('touch-right-knob');
+            if(rightKnob) rightKnob.style.transform = 'translate(-50%, -50%)';
+            triggerDelayedResize();
+        }
+
+        function handleCollisions() {
+            const px = drone.position.x, py = drone.position.y, pz = drone.position.z; 
+            const buffer = 0.8; 
+            for(let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                if(px + buffer > obs.minX && px - buffer < obs.maxX && pz + buffer > obs.minZ && pz - buffer < obs.maxZ) {
+                    if(py + buffer > obs.minY && py - buffer < obs.maxY) {
+                        let overlapX = Math.min(obs.maxX - (px - buffer), (px + buffer) - obs.minX);
+                        let overlapZ = Math.min(obs.maxZ - (pz - buffer), (pz + buffer) - obs.minZ);
+                        let speedH = Math.sqrt(drone.velocity.x * drone.velocity.x + drone.velocity.z * drone.velocity.z);
+
+                        if (overlapX < overlapZ) {
+                            drone.position.x += (px > (obs.minX + obs.maxX)/2) ? overlapX : -overlapX;
+                            drone.velocity.x *= -0.4;
+                        } else {
+                            drone.position.z += (pz > (obs.minZ + obs.maxZ)/2) ? overlapZ : -overlapZ;
+                            drone.velocity.z *= -0.4;
+                        }
+                        if (speedH > 4.5) {
+                            tumbleRotationVelocity.set((Math.random() - 0.5) * 60.0, (Math.random() - 0.5) * 40.0, (Math.random() - 0.5) * 60.0);
+                            drone.velocity.y = speedH * 0.45 + 2.5; 
+                        } else {
+                            drone.velocity.y = 2.8; 
+                            tumbleRotationVelocity.set((Math.random()-0.5)*9, (Math.random()-0.5)*9, (Math.random()-0.5)*9);
+                        }
+                    }
+                }
+            }
+        }
+
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
+            let dt = clock.getDelta(); if (dt > 0.1) dt = 0.1;
+            const modeCfg = MODES[activeMode];
 
-            const delta = Math.min(clock.getDelta(), 0.1);
-            world.step(1 / 60, delta, 3);
+            if (!gameStarted) {
+                cinematicTime += dt * 0.5;
+                cinematicSlowdownFactor = Math.max(0.08, cinematicSlowdownFactor - 0.01 * dt);
+                
+                const radius = 60;
+                const camX = Math.cos(cinematicTime) * radius;
+                const camZ = Math.sin(cinematicTime) * radius + 10;
+                const camY = 25 + Math.sin(cinematicTime * 0.5) * 15;
+                
+                camera.position.set(camX, camY, camZ);
+                camera.lookAt(0, 15, -20);
 
-            const currentSpeed = Math.sqrt(playerBody.velocity.x ** 2 + playerBody.velocity.z ** 2);
+                propMeshes.forEach(prop => { prop.rotation.y += 0.15; });
 
-            headShakeTime += delta * (currentSpeed > 2 ? currentSpeed * 0.8 : 1.5);
-            const breathSwayX = Math.sin(headShakeTime * 0.8) * 0.015;
-            const breathSwayY = Math.cos(headShakeTime * 1.2) * 0.012;
+                cloudGroup.children.forEach(c => {
+                    c.position.x += 1.5 * dt * 0.3;
+                    if(c.position.x > 1500) c.position.x = -1500;
+                });
 
-            const isMoving = KEYS.r || KEYS.d || KEYS.f || KEYS.g || mobileMoveDir.x !== 0 || mobileMoveDir.y !== 0;
-            if (isMoving) {
-                handBob += delta * Math.max(12, currentSpeed * 0.85);
+                renderer.render(scene, camera);
+                return;
+            }
+
+            let inputYaw = 0, targetPitch = 0, targetRoll = 0;
+
+            if (!isArmed) {
+                currentThrottle = 0; stickyThrottleValue = 0;
             } else {
-                handBob += delta * 2;
+                if (isMobile) {
+                    stickyThrottleValue = THREE.MathUtils.clamp((-touchLeftValY + 1) / 2, 0, 1);
+                    currentThrottle = stickyThrottleValue;
+                } else {
+                    if (keys.w) stickyThrottleValue = Math.min(1.0, stickyThrottleValue + THROTTLE_CHANGE_SPEED * dt);
+                    if (keys.s) stickyThrottleValue = Math.max(0.0, stickyThrottleValue - THROTTLE_CHANGE_SPEED * dt);
+                    currentThrottle = stickyThrottleValue;
+                }
             }
 
-            const headBobX = isMoving ? Math.sin(handBob * 0.5) * 0.04 * Math.min(1.5, currentSpeed * 0.1) : 0;
-            const headBobY = isMoving ? Math.abs(Math.sin(handBob)) * 0.06 * Math.min(1.5, currentSpeed * 0.1) : 0;
+            if (isMobile) {
+                inputYaw = touchLeftValX * YAW_RATE * dt;
+                targetPitch = touchRightValY * (modeCfg.hasAutoLevel ? modeCfg.maxAngle : 2.5);
+                targetRoll = -touchRightValX * (modeCfg.hasAutoLevel ? modeCfg.maxAngle : 2.5);
 
-            const baseHeadPos = new THREE.Vector3().copy(playerBody.position).add(new THREE.Vector3(headBobX + breathSwayX, 0.7 + headBobY + breathSwayY, 0));
-            camera.position.copy(baseHeadPos);
-
-            const cameraRoll = isMoving ? Math.sin(handBob * 0.5) * 0.025 : 0;
-            const euler = new THREE.Euler(pitch, yaw, cameraRoll, 'YXZ');
-            camera.quaternion.setFromEuler(euler);
-
-            const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-            const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-
-            const moveDir = new THREE.Vector3(0, 0, 0);
-            if (KEYS.r) moveDir.add(forward);
-            if (KEYS.f) moveDir.sub(forward);
-            if (KEYS.d) moveDir.sub(right);
-            if (KEYS.g) moveDir.add(right);
-
-            if (mobileMoveDir.y !== 0) {
-                const fCopy = forward.clone().multiplyScalar(mobileMoveDir.y);
-                moveDir.add(fCopy);
-            }
-            if (mobileMoveDir.x !== 0) {
-                const rCopy = right.clone().multiplyScalar(mobileMoveDir.x);
-                moveDir.add(rCopy);
-            }
-
-            if (moveDir.lengthSq() > 0) moveDir.normalize();
-
-            const moveSpeed = 22.0;
-            const grounded = isGrounded();
-
-            if (grounded) {
-                playerBody.velocity.x += moveDir.x * moveSpeed * delta * 8.0;
-                playerBody.velocity.z += moveDir.z * moveSpeed * delta * 8.0;
-
-                if (KEYS.space || KEYS.shift || mobileJumpPressed) {
-                    playerBody.velocity.y = 16.5;
-                    playThumpSound(190, 0.2);
+                drone.euler.y -= inputYaw;
+                if (modeCfg.hasAutoLevel) {
+                    drone.euler.x = targetPitch; drone.euler.z = targetRoll;
+                    drone.rotation.setFromEuler(drone.euler);
+                } else {
+                    const deltaRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(targetPitch * dt, -inputYaw, targetRoll * dt, 'YXZ'));
+                    drone.rotation.multiply(deltaRotation).normalize();
                 }
             } else {
-                playerBody.velocity.x += moveDir.x * moveSpeed * delta * 3.0;
-                playerBody.velocity.z += moveDir.z * moveSpeed * delta * 3.0;
+                if (document.pointerLockElement === container) {
+                    if (keys.a) inputYaw = -YAW_RATE * dt;
+                    if (keys.d) inputYaw = YAW_RATE * dt;
+                    drone.euler.y -= inputYaw;
+
+                    let klPitch = 0;
+                    let klRoll = 0;
+                    if (keys.i) klPitch += 2.0 * dt; 
+                    if (keys.k) klPitch -= 2.0 * dt; 
+                    if (keys.j) klRoll -= 2.0 * dt;
+                    if (keys.l) klRoll += 2.0 * dt;
+
+                    let effectivePitch = mousePitch + klPitch;
+                    let effectiveRoll = mouseRoll + klRoll;
+                    rawMouseX += klRoll * 15;
+                    rawMouseY -= klPitch * 15;
+
+                    if (modeCfg.hasAutoLevel) {
+                        drone.euler.x = THREE.MathUtils.clamp(drone.euler.x + effectivePitch, -modeCfg.maxAngle, modeCfg.maxAngle);
+                        drone.euler.z = THREE.MathUtils.clamp(drone.euler.z - effectiveRoll, -modeCfg.maxAngle, modeCfg.maxAngle);
+                        if (Math.abs(effectivePitch) < 0.001) drone.euler.x *= Math.exp(-6.0 * dt);
+                        if (Math.abs(effectiveRoll) < 0.001) drone.euler.z *= Math.exp(-6.0 * dt);
+                        drone.rotation.setFromEuler(drone.euler);
+                    } else {
+                        const deltaRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(-effectivePitch * 30.0 * dt, -inputYaw, -effectiveRoll * 30.0 * dt, 'YXZ'));
+                        drone.rotation.multiply(deltaRotation).normalize();
+                    }
+                } else {
+                    rawMouseX *= Math.exp(-10.0 * dt);
+                    rawMouseY *= Math.exp(-10.0 * dt);
+                }
             }
 
-            const yawQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-            const lSwing = Math.sin(handBob) * 0.22;
-            const rSwing = Math.cos(handBob) * 0.22;
-
-            const leftHandOffset = new THREE.Vector3(-0.55, -0.65 + lSwing * 0.5, -0.55 + lSwing);
-            const rightHandOffset = new THREE.Vector3(0.55, -0.65 + rSwing * 0.5, -0.55 + rSwing);
-
-            leftHandMesh.position.copy(baseHeadPos).add(leftHandOffset.applyQuaternion(yawQuaternion));
-            rightHandMesh.position.copy(baseHeadPos).add(rightHandOffset.applyQuaternion(yawQuaternion));
-
-            const handRotEuler = new THREE.Euler(pitch * 0.3, yaw, 0, 'YXZ');
-            leftHandMesh.quaternion.setFromEuler(handRotEuler);
-            rightHandMesh.quaternion.setFromEuler(handRotEuler);
-
-            if (grounded && isMoving && Math.sin(handBob * 2) > 0.9) {
-                playThumpSound(100, 0.08);
+            if (tumbleRotationVelocity.lengthSq() > 0.001) {
+                const tumbleQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(tumbleRotationVelocity.z * dt, tumbleRotationVelocity.y * dt, tumbleRotationVelocity.x * dt, 'YXZ'));
+                drone.rotation.multiply(tumbleQuaternion).normalize();
+                tumbleRotationVelocity.multiplyScalar(Math.exp(-2.4 * dt)); 
+                if (modeCfg.hasAutoLevel && tumbleRotationVelocity.lengthSq() < 0.4) drone.euler.setFromQuaternion(drone.rotation, 'YXZ'); 
             }
 
-            const bound = groundSize / 2 - 4;
-            if (Math.abs(playerBody.position.x) > bound) playerBody.position.x = Math.sign(playerBody.position.x) * bound;
-            if (Math.abs(playerBody.position.z) > bound) playerBody.position.z = Math.sign(playerBody.position.z) * bound;
+            const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(drone.rotation);
+            const accel = new THREE.Vector3().addVectors(localUp.multiplyScalar(currentThrottle * modeCfg.maxThrust), new THREE.Vector3(0, -GRAVITY, 0));
+            drone.velocity.addScaledVector(drone.velocity, -modeCfg.drag);
+            drone.velocity.addScaledVector(accel, dt);
+            drone.position.addScaledVector(drone.velocity, dt);
+
+            if (drone.position.y <= 0.3) {
+                drone.position.y = 0.3; drone.velocity.y = 0;
+                drone.velocity.x *= 0.5; drone.velocity.z *= 0.5;
+                tumbleRotationVelocity.set(0, 0, 0);
+                if (modeCfg.hasAutoLevel) { drone.euler.x = 0; drone.euler.z = 0; drone.rotation.setFromEuler(drone.euler); }
+            }
+
+            handleCollisions();
+            droneGroup.position.copy(drone.position);
+            droneGroup.quaternion.copy(drone.rotation);
+
+            if (drone.position.y <= 1.0 && drone.velocity.length() > 2.0) {
+                dustSystem.visible = true;
+                dustSystem.position.copy(drone.position);
+                dustSystem.position.y = 0.1;
+                const positions = dustSystem.geometry.attributes.position.array;
+                const speedMult = drone.velocity.length() * 0.1;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += (Math.random() - 0.5) * speedMult;
+                    positions[i+2] += (Math.random() - 0.5) * speedMult;
+                    if (Math.abs(positions[i]) > 6 || Math.abs(positions[i+2]) > 6) {
+                        positions[i] = (Math.random() - 0.5) * 2;
+                        positions[i+2] = (Math.random() - 0.5) * 2;
+                    }
+                }
+                dustSystem.geometry.attributes.position.needsUpdate = true;
+            } else {
+                dustSystem.visible = false;
+            }
+
+            droneShadow.position.x = drone.position.x;
+            droneShadow.position.z = drone.position.z;
+            const heightFactor = Math.max(0.2, 1.0 - (drone.position.y / 25.0));
+            droneShadow.scale.set(3.2 * heightFactor, 3.2 * heightFactor, 1);
+            droneShadow.material.opacity = Math.max(0.05, 0.55 * heightFactor);
+
+            const propsMoving = isArmed && currentThrottle > 0.05;
+            propMat.opacity = propsMoving ? 0.3 : 1.0;
+            if (propsMoving) propMeshes.forEach(prop => { prop.rotation.y += 1.0; });
+
+            cloudGroup.children.forEach(c => {
+                c.position.x += 1.5 * dt;
+                if(c.position.x > 1500) c.position.x = -1500;
+            });
+
+            if (cameraMode === "FPV") {
+                camera.position.copy(drone.position);
+                const camRot = drone.rotation.clone();
+                camRot.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), CAMERA_UPTILT));
+                camera.quaternion.copy(camRot);
+                propMeshes.forEach(prop => {
+                    prop.position.x = prop.userData.baseX + Math.sign(prop.userData.baseX) * 1.2;
+                });
+                droneGroup.visible = true;
+                droneGroup.children.forEach(part => { part.visible = propMeshes.includes(part); });
+            } else {
+                droneGroup.visible = true;
+                propMeshes.forEach(prop => { prop.position.x = prop.userData.baseX; });
+                droneGroup.children.forEach(part => { part.visible = true; });
+                
+                const backOffset = new THREE.Vector3(0, 2.5, 7.5).applyQuaternion(drone.rotation);
+                camera.position.lerp(new THREE.Vector3().addVectors(drone.position, backOffset), 0.2);
+                
+                const lookTarget = drone.position.clone().add(new THREE.Vector3(0, 0.5, -5).applyQuaternion(drone.rotation));
+                camera.lookAt(lookTarget);
+            }
+            if (camera.position.y < 0.5) camera.position.y = 0.5;
+
+            mousePitch = 0; mouseRoll = 0;
+
+            const speedKmh = drone.velocity.length() * 3.6;
+            document.getElementById('osd-speed').innerText = speedKmh.toFixed(1);
+            document.getElementById('osd-alt').innerText = drone.position.y.toFixed(1) + 'm';
+            const tiltAngle = Math.round(Math.abs(drone.euler.x) * (180 / Math.PI));
+            document.getElementById('osd-angle').innerText = tiltAngle + '°';
+
+            const stickLeft = document.getElementById('stick-left');
+            const stickRight = document.getElementById('stick-right');
+            let leftY, leftX, rightX, rightY;
+
+            const maxPixelOffset = (35 * (isMobile ? 1.0 : stickScale));
+            if (isMobile) {
+                leftY = touchLeftValY * maxPixelOffset; leftX = touchLeftValX * maxPixelOffset;
+                rightX = touchRightValX * maxPixelOffset; rightY = touchRightValY * maxPixelOffset;
+            } else {
+                leftY = -(stickyThrottleValue * 2 - 1) * maxPixelOffset; 
+                let klYaw = (keys.d ? 1 : (keys.a ? -1 : 0));
+                let klRollStick = (keys.l ? 1 : (keys.j ? -1 : 0));
+                let klPitchStick = (keys.i ? -1 : (keys.k ? 1 : 0)); 
+                leftX = klYaw * maxPixelOffset;
+                rawMouseX *= Math.exp(-12.0 * dt); rawMouseY *= Math.exp(-12.0 * dt);
+                rightX = Math.max(-maxPixelOffset, Math.min(maxPixelOffset, (rawMouseX + klRollStick * 20) * 1.4));
+                rightY = Math.max(-maxPixelOffset, Math.min(maxPixelOffset, (rawMouseY + klPitchStick * 20) * 1.4));
+            }
+
+            stickLeft.style.transform = `translate(calc(-50% + ${leftX}px), calc(-50% + ${leftY}px))`;
+            stickRight.style.transform = `translate(calc(-50% + ${rightX}px), calc(-50% + ${rightY}px))`;
 
             renderer.render(scene, camera);
         }
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        window.onload = function() {
-            animate();
-        };
+        animate();
     </script>
 </body>
 </html>
