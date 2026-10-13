@@ -38,7 +38,7 @@
         .osd-label { color: #aaaaaa; }
         .osd-val { color: #ffffff; font-weight: bold; min-width: 45px; text-align: right; }
 
-        /* RC STICKS OVERLAY - RETRO PIXELATED FPV STYLE (UNCHANGED) */
+        /* RC STICKS OVERLAY */
         #rc-sticks-container {
             position: absolute;
             bottom: 20px;
@@ -59,8 +59,6 @@
             pointer-events: auto;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: -webkit-optimize-contrast;
         }
 
         .stick-box {
@@ -95,7 +93,6 @@
             transform: translate(-50%, -50%);
             box-shadow: 0 0 4px rgba(0, 255, 0, 0.9); 
             z-index: 4;
-            image-rendering: pixelated;
             will-change: transform;
         }
 
@@ -193,8 +190,6 @@
             letter-spacing: 1px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.6);
             transition: transform 0.2s, border-color 0.2s;
-            position: relative;
-            overflow: hidden;
         }
         .game-card:hover {
             transform: translateY(-5px);
@@ -236,7 +231,7 @@
 <body>
 
     <div id="canvas-container">
-        <!-- Telemetry OSD Overlay (Right Side) -->
+        <!-- Telemetry OSD Overlay -->
         <div id="manual-osd-container">
             <div class="osd-line"><span class="osd-label">FPS</span><span id="osd-fps" class="osd-val">165</span></div>
             <div class="osd-line"><span class="osd-label">TRT</span><span class="osd-val">1</span></div>
@@ -317,10 +312,9 @@
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
 
-            // 1. Motor Whine Synthesizer (Sawtooth oscillator for multi-rotor buzz)
             motorOsc = audioCtx.createOscillator();
-            motorOsc.type = 'sawtooth';
-            motorOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
+            motorOsc.type = 'sine';
+            motorOsc.frequency.setValueAtTime(50, audioCtx.currentTime);
 
             motorGain = audioCtx.createGain();
             motorGain.gain.setValueAtTime(0, audioCtx.currentTime);
@@ -329,7 +323,6 @@
             motorGain.connect(audioCtx.destination);
             motorOsc.start();
 
-            // 2. Wind Rush Synthesizer (Filtered White Noise)
             const bufferSize = audioCtx.sampleRate * 2;
             const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
@@ -343,8 +336,8 @@
 
             const windFilter = audioCtx.createBiquadFilter();
             windFilter.type = 'bandpass';
-            windFilter.frequency.setValueAtTime(400, audioCtx.currentTime);
-            windFilter.Q.setValueAtTime(1.0, audioCtx.currentTime);
+            windFilter.frequency.setValueAtTime(300, audioCtx.currentTime);
+            windFilter.Q.setValueAtTime(1.2, audioCtx.currentTime);
 
             windGain = audioCtx.createGain();
             windGain.gain.setValueAtTime(0, audioCtx.currentTime);
@@ -360,29 +353,27 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.3);
+            osc.frequency.setValueAtTime(90, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.25);
 
-            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
 
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.start();
-            osc.stop(audioCtx.currentTime + 0.3);
+            osc.stop(audioCtx.currentTime + 0.25);
         }
 
         function updateAudio(throttle, speed) {
             if (!audioCtx || audioCtx.state !== 'running') return;
 
-            // Motor pitch & volume scales with throttle
-            const targetFreq = 80 + throttle * 450;
-            const targetMotorGain = isArmed ? (0.05 + throttle * 0.15) : 0;
+            const targetFreq = 70 + throttle * 320;
+            const targetMotorGain = isArmed ? (0.02 + throttle * 0.08) : 0;
             motorOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.05);
             motorGain.gain.setTargetAtTime(targetMotorGain, audioCtx.currentTime, 0.05);
 
-            // Wind volume scales with speed
-            const targetWindGain = Math.min(0.25, (speed / 60) * 0.25);
+            const targetWindGain = Math.min(0.12, (speed / 60) * 0.12);
             windGain.gain.setTargetAtTime(targetWindGain, audioCtx.currentTime, 0.1);
         }
 
@@ -472,28 +463,50 @@
         const floorMat = new THREE.MeshBasicMaterial({ map: floorTex });
         scene.add(new THREE.Mesh(floorGeo, floorMat));
 
-        // Parking lines & markings on asphalt
-        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        for(let i = -3; i <= 3; i++) {
-            if(i === 0) continue;
-            const line = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 8), lineMat);
-            line.rotation.x = -Math.PI/2;
-            line.position.set(i * 12, 0.02, 25);
-            scene.add(line);
-        }
+        // --- FULLY POPULATED MALL WITH WIDE OPEN ENTRANCE ARCHWAY ---
+        const obstacles = [];
 
-        // --- SHOPPING MALL & MAP PROPS ---
         const mallConcreteMat = new THREE.MeshBasicMaterial({ color: 0xdce3ed });
         const mallDarkMat = new THREE.MeshBasicMaterial({ color: 0x2b323d });
-        const glassBuildingMat = new THREE.MeshBasicMaterial({ color: 0x3d5a73, transparent: true, opacity: 0.75 });
+        const interiorFloorMat = new THREE.MeshBasicMaterial({ color: 0x3b4252 });
+        const pillarMat = new THREE.MeshBasicMaterial({ color: 0xe5e9f0 });
+        const sofaMat = new THREE.MeshBasicMaterial({ color: 0xbf616a });
+        const bedMat = new THREE.MeshBasicMaterial({ color: 0x5e81ac });
+        const pillowMat = new THREE.MeshBasicMaterial({ color: 0xd8dee9 });
+        const personSkinMat = new THREE.MeshBasicMaterial({ color: 0xebdbb2 });
+        const personShirtMat = new THREE.MeshBasicMaterial({ color: 0x88c0d0 });
+        const personPantsMat = new THREE.MeshBasicMaterial({ color: 0x4c566a });
+        const kidShirtMat = new THREE.MeshBasicMaterial({ color: 0xa3be8c });
+        const playSlideMat = new THREE.MeshBasicMaterial({ color: 0xebcb8b });
+        const playTubeMat = new THREE.MeshBasicMaterial({ color: 0xb48ead });
 
-        const mallMain = new THREE.Mesh(new THREE.BoxGeometry(140, 45, 80), mallConcreteMat);
-        mallMain.position.set(0, 22.5, -70);
+        const mallMain = new THREE.Mesh(new THREE.BoxGeometry(160, 45, 140), mallConcreteMat);
+        mallMain.position.set(0, 22.5, -90);
         scene.add(mallMain);
 
-        const mallGlassFront = new THREE.Mesh(new THREE.BoxGeometry(110, 32, 2), glassBuildingMat);
-        mallGlassFront.position.set(0, 16, -29);
-        scene.add(mallGlassFront);
+        const atriumInterior = new THREE.Mesh(new THREE.BoxGeometry(140, 38, 110), new THREE.MeshBasicMaterial({ color: 0xf2f4f8, side: THREE.BackSide }));
+        atriumInterior.position.set(0, 19, -90);
+        scene.add(atriumInterior);
+
+        const mallFloor = new THREE.Mesh(new THREE.PlaneGeometry(140, 110), interiorFloorMat);
+        mallFloor.rotation.x = -Math.PI / 2;
+        mallFloor.position.set(0, 0.05, -90);
+        scene.add(mallFloor);
+
+        const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry(45, 45, 2), mallConcreteMat);
+        frontWallLeft.position.set(-52.5, 22.5, -39);
+        scene.add(frontWallLeft);
+        obstacles.push({ minX: -75, maxX: -30, minZ: -40, maxZ: -38, minY: 0, maxY: 45 });
+
+        const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry(45, 45, 2), mallConcreteMat);
+        frontWallRight.position.set(52.5, 22.5, -39);
+        scene.add(frontWallRight);
+        obstacles.push({ minX: 30, maxX: 75, minZ: -40, maxZ: -38, minY: 0, maxY: 45 });
+
+        const frontHeader = new THREE.Mesh(new THREE.BoxGeometry(60, 15, 2), mallConcreteMat);
+        frontHeader.position.set(0, 37.5, -39);
+        scene.add(frontHeader);
+        obstacles.push({ minX: -30, maxX: 30, minZ: -40, maxZ: -38, minY: 30, maxY: 45 });
 
         const bannerCanvas = document.createElement('canvas');
         bannerCanvas.width = 512; bannerCanvas.height = 128;
@@ -507,15 +520,103 @@
         const bannerTex = new THREE.CanvasTexture(bannerCanvas);
         
         const billboard = new THREE.Mesh(new THREE.BoxGeometry(50, 14, 2), new THREE.MeshBasicMaterial({ map: bannerTex }));
-        billboard.position.set(0, 34, -28.5);
+        billboard.position.set(0, 34, -38.5);
         scene.add(billboard);
+
+        const bedBase = new THREE.Mesh(new THREE.BoxGeometry(7, 2, 9), bedMat);
+        bedBase.position.set(-35, 1.0, -85);
+        scene.add(bedBase);
+        obstacles.push({ minX: -38.5, maxX: -31.5, minZ: -89.5, maxZ: -80.5, minY: 0, maxY: 3.5 });
+
+        const pillow1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 1.8), pillowMat);
+        pillow1.position.set(-37, 2.2, -88);
+        scene.add(pillow1);
+        const pillow2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 1.8), pillowMat);
+        pillow2.position.set(-33, 2.2, -88);
+        scene.add(pillow2);
+
+        function createSofa(x, z, rotY = 0) {
+            const sofaGroup = new THREE.Group();
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 3), sofaMat);
+            seat.position.y = 0.6;
+            sofaGroup.add(seat);
+            const back = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 1), sofaMat);
+            back.position.set(0, 2.1, -1);
+            sofaGroup.add(back);
+            sofaGroup.position.set(x, 0, z);
+            sofaGroup.rotation.y = rotY;
+            scene.add(sofaGroup);
+            obstacles.push({ minX: x - 3.2, maxX: x + 3.2, minZ: z - 1.8, maxZ: z + 1.8, minY: 0, maxY: 4 });
+        }
+        createSofa(-20, -65, 0);
+        createSofa(20, -65, 0);
+
+        function createPerson(x, z, isChild = false) {
+            const group = new THREE.Group();
+            const scale = isChild ? 0.6 : 1.0;
+            
+            const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.35 * scale, 2 * scale, 0.35 * scale), personPantsMat);
+            leg1.position.set(-0.3 * scale, 1 * scale, 0);
+            group.add(leg1);
+            const leg2 = new THREE.Mesh(new THREE.BoxGeometry(0.35 * scale, 2 * scale, 0.35 * scale), personPantsMat);
+            leg2.position.set(0.3 * scale, 1 * scale, 0);
+            group.add(leg2);
+
+            const torsoMat = isChild ? kidShirtMat : personShirtMat;
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1 * scale, 2.2 * scale, 0.6 * scale), torsoMat);
+            torso.position.set(0, 3.1 * scale, 0);
+            group.add(torso);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.8 * scale, 0.8 * scale, 0.8 * scale), personSkinMat);
+            head.position.set(0, 4.5 * scale, 0);
+            group.add(head);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            
+            const radius = isChild ? 0.6 : 1.0;
+            obstacles.push({ minX: x - radius, maxX: x + radius, minZ: z - radius, maxZ: z + radius, minY: 0, maxY: (isChild ? 3.2 : 5.2) });
+        }
+        createPerson(-10, -75, false);
+        createPerson(12, -78, false);
+        createPerson(-5, -85, true);
+        createPerson(5, -88, true);
+
+        const playgroundGroup = new THREE.Group();
+        const playBase = new THREE.Mesh(new THREE.BoxGeometry(12, 5, 12), interiorFloorMat);
+        playBase.position.set(35, 2.5, -95);
+        playgroundGroup.add(playBase);
+
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(3, 0.5, 10), playSlideMat);
+        slide.position.set(35, 3.5, -86);
+        slide.rotation.x = 0.4;
+        playgroundGroup.add(slide);
+
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 10, 16), playTubeMat);
+        tube.rotation.z = Math.PI / 2;
+        tube.position.set(35, 6, -95);
+        playgroundGroup.add(tube);
+
+        scene.add(playgroundGroup);
+        obstacles.push({ minX: 28, maxX: 42, minZ: -103, maxZ: -85, minY: 0, maxY: 9 });
+
+        for (let x = -45; x <= 45; x += 30) {
+            for (let z = -65; z > -130; z -= 25) {
+                const pillar = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 38, 16), pillarMat);
+                pillar.position.set(x, 19, z);
+                scene.add(pillar);
+                obstacles.push({ minX: x - 2.2, maxX: x + 2.2, minZ: z - 2.2, maxZ: z + 2.2, minY: 0, maxY: 38 });
+            }
+        }
 
         const roofGlassMat = new THREE.MeshBasicMaterial({ color: 0x8ab6d6, transparent: true, opacity: 0.65 });
         for(let i = -1; i <= 1; i++) {
-            const skylight = new THREE.Mesh(new THREE.BoxGeometry(25, 4, 35), roofGlassMat);
-            skylight.position.set(i * 35, 47, -70);
+            const skylight = new THREE.Mesh(new THREE.BoxGeometry(25, 4, 45), roofGlassMat);
+            skylight.position.set(i * 35, 47, -90);
             scene.add(skylight);
         }
+
+        obstacles.push({ minX: -80, maxX: 80, minZ: -160, maxZ: -20, minY: 0, maxY: 45 });
 
         function createPalmTree(x, z) {
             const treeGroup = new THREE.Group();
@@ -547,26 +648,6 @@
             createPalmTree(x, 0);
             createPalmTree(x, 25);
         }
-
-        const poleMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
-        function createStreetLight(x, z) {
-            const lightGroup = new THREE.Group();
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 12, 8), poleMat);
-            pole.position.y = 6;
-            lightGroup.add(pole);
-            const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 2.5), poleMat);
-            lamp.position.set(0.8, 11.8, 0);
-            lightGroup.add(lamp);
-            lightGroup.position.set(x, 0, z);
-            scene.add(lightGroup);
-        }
-        createStreetLight(-60, 15);
-        createStreetLight(60, 15);
-        createStreetLight(-60, -10);
-        createStreetLight(60, -10);
-
-        const obstacles = [];
-        obstacles.push({ minX: -70, maxX: 70, minZ: -110, maxZ: -30, minY: 0, maxY: 45 });
 
         const dustCount = 150;
         const dustGeo = new THREE.BufferGeometry();
@@ -703,8 +784,10 @@
         let tumbleRotationVelocity = new THREE.Vector3(0, 0, 0);
 
         let keys = { w: false, s: false, a: false, d: false, i: false, j: false, k: false, l: false, ' ': false };
-        let mousePitch = 0, mouseRoll = 0;
+        let mousePitch = 0, mouseRoll = 0, mouseYaw = 0;
         let rawMouseX = 0, rawMouseY = 0;
+        let rawMouseYaw = 0;
+        let isLeftMouseDown = false;
 
         let touchLeftValX = 0, touchLeftValY = 1.0; 
         let touchRightValX = 0, touchRightValY = 0;
@@ -805,7 +888,18 @@
                     inst.style.display = 'flex';
                     rawMouseX = 0; 
                     rawMouseY = 0;
+                    rawMouseYaw = 0;
                 }
+            }
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.button === 0) isLeftMouseDown = true;
+        });
+        document.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                isLeftMouseDown = false;
+                rawMouseYaw = 0;
             }
         });
 
@@ -834,12 +928,21 @@
 
         document.addEventListener('mousemove', (e) => {
             if (!gameStarted || isMobile || document.pointerLockElement !== container) return;
-            mousePitch = -e.movementY * MOUSE_SENSITIVITY;
-            mouseRoll = e.movementX * MOUSE_SENSITIVITY;
-            rawMouseX += e.movementX * 0.4;
-            rawMouseY += e.movementY * 0.4;
-            rawMouseX = Math.max(-28, Math.min(28, rawMouseX));
-            rawMouseY = Math.max(-28, Math.min(28, rawMouseY));
+
+            if (isLeftMouseDown) {
+                mouseYaw = e.movementX * MOUSE_SENSITIVITY * 1.5;
+                stickyThrottleValue = THREE.MathUtils.clamp(stickyThrottleValue - e.movementY * 0.005, 0, 1);
+                // Inverted rawMouseYaw for overlay to match left-to-left / right-to-right stick movement
+                rawMouseYaw += e.movementX * 0.4;
+                rawMouseYaw = Math.max(-28, Math.min(28, rawMouseYaw));
+            } else {
+                mousePitch = -e.movementY * MOUSE_SENSITIVITY;
+                mouseRoll = e.movementX * MOUSE_SENSITIVITY;
+                rawMouseX += e.movementX * 0.4;
+                rawMouseY += e.movementY * 0.4;
+                rawMouseX = Math.max(-28, Math.min(28, rawMouseX));
+                rawMouseY = Math.max(-28, Math.min(28, rawMouseY));
+            }
         });
 
         function setupTouchJoystick(padId, knobId, callback, isStickyY = false) {
@@ -932,7 +1035,7 @@
         function resetDrone() {
             drone.position.set(0, 0.3, 45); drone.velocity.set(0, 0, 0); drone.rotation.set(0, 0, 0, 1); drone.euler.set(0, 0, 0);
             currentThrottle = 0; stickyThrottleValue = 0; tumbleRotationVelocity.set(0, 0, 0);
-            rawMouseX = 0; rawMouseY = 0; touchLeftValX = 0; touchLeftValY = 1.0; touchRightValX = 0; touchRightValY = 0;
+            rawMouseX = 0; rawMouseY = 0; rawMouseYaw = 0; touchLeftValX = 0; touchLeftValY = 1.0; touchRightValX = 0; touchRightValY = 0;
 
             const leftKnob = document.getElementById('touch-left-knob');
             if(leftKnob) {
@@ -1034,8 +1137,7 @@
                 }
             } else {
                 if (document.pointerLockElement === container) {
-                    if (keys.a) inputYaw = -YAW_RATE * dt;
-                    if (keys.d) inputYaw = YAW_RATE * dt;
+                    inputYaw = mouseYaw + (keys.d ? YAW_RATE * dt : (keys.a ? -YAW_RATE * dt : 0));
                     drone.euler.y -= inputYaw;
 
                     let klPitch = 0;
@@ -1063,6 +1165,7 @@
                 } else {
                     rawMouseX *= Math.exp(-10.0 * dt);
                     rawMouseY *= Math.exp(-10.0 * dt);
+                    rawMouseYaw *= Math.exp(-10.0 * dt);
                 }
             }
 
@@ -1090,7 +1193,6 @@
             droneGroup.position.copy(drone.position);
             droneGroup.quaternion.copy(drone.rotation);
 
-            // Update Audio loop state based on throttle & speed
             updateAudio(currentThrottle, drone.velocity.length());
 
             if (drone.position.y <= 1.0 && drone.velocity.length() > 2.0) {
@@ -1150,7 +1252,8 @@
             }
             if (camera.position.y < 0.5) camera.position.y = 0.5;
 
-            mousePitch = 0; mouseRoll = 0;
+            mousePitch = 0; mouseRoll = 0; mouseYaw = 0;
+            rawMouseYaw *= Math.exp(-15.0 * dt);
 
             const speedKmh = drone.velocity.length() * 3.6;
             document.getElementById('osd-speed').innerText = speedKmh.toFixed(1);
@@ -1169,7 +1272,9 @@
                 let klYaw = (keys.d ? 1 : (keys.a ? -1 : 0));
                 let klRollStick = (keys.l ? 1 : (keys.j ? -1 : 0));
                 let klPitchStick = (keys.i ? -1 : (keys.k ? 1 : 0)); 
-                leftX = klYaw * maxPixelOffset;
+                
+                leftX = Math.max(-maxPixelOffset, Math.min(maxPixelOffset, (rawMouseYaw + klYaw * 20) * 1.4));
+
                 rawMouseX *= Math.exp(-12.0 * dt); rawMouseY *= Math.exp(-12.0 * dt);
                 rightX = Math.max(-maxPixelOffset, Math.min(maxPixelOffset, (rawMouseX + klRollStick * 20) * 1.4));
                 rightY = Math.max(-maxPixelOffset, Math.min(maxPixelOffset, (rawMouseY + klPitchStick * 20) * 1.4));
