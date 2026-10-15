@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>FPV LOGIC</title>
-    <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/raffamanchy/TRYP-FPV/main/PNG.ico">
+    <!-- Local offline icon reference -->
+    <link rel="icon" type="image/png" href="logic.png">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
         html, body { width: 100%; height: 100%; overflow: hidden; background: #121218; font-family: consolas, sans-serif; position: fixed; }
@@ -38,7 +39,7 @@
         .osd-label { color: #aaaaaa; }
         .osd-val { color: #ffffff; font-weight: bold; min-width: 45px; text-align: right; }
 
-        /* RC STICKS OVERLAY - RETRO PIXELATED FPV STYLE (UNCHANGED) */
+        /* RC STICKS OVERLAY */
         #rc-sticks-container {
             position: absolute;
             bottom: 20px;
@@ -231,7 +232,8 @@
             100% { opacity: 1.0; }
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Loaded locally as main.three.js for offline usage -->
+    <script src="main.three.js"></script>
 </head>
 <body>
 
@@ -317,7 +319,6 @@
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
 
-            // 1. Motor Whine Synthesizer (Sawtooth oscillator for multi-rotor buzz)
             motorOsc = audioCtx.createOscillator();
             motorOsc.type = 'sawtooth';
             motorOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
@@ -329,7 +330,6 @@
             motorGain.connect(audioCtx.destination);
             motorOsc.start();
 
-            // 2. Wind Rush Synthesizer (Filtered White Noise)
             const bufferSize = audioCtx.sampleRate * 2;
             const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
@@ -374,14 +374,11 @@
 
         function updateAudio(throttle, speed) {
             if (!audioCtx || audioCtx.state !== 'running') return;
-
-            // Motor pitch & volume scales with throttle
             const targetFreq = 80 + throttle * 450;
             const targetMotorGain = isArmed ? (0.05 + throttle * 0.15) : 0;
             motorOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.05);
             motorGain.gain.setTargetAtTime(targetMotorGain, audioCtx.currentTime, 0.05);
 
-            // Wind volume scales with speed
             const targetWindGain = Math.min(0.25, (speed / 60) * 0.25);
             windGain.gain.setTargetAtTime(targetWindGain, audioCtx.currentTime, 0.1);
         }
@@ -472,7 +469,6 @@
         const floorMat = new THREE.MeshBasicMaterial({ map: floorTex });
         scene.add(new THREE.Mesh(floorGeo, floorMat));
 
-        // Parking lines & markings on asphalt
         const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         for(let i = -3; i <= 3; i++) {
             if(i === 0) continue;
@@ -842,6 +838,19 @@
             rawMouseY = Math.max(-28, Math.min(28, rawMouseY));
         });
 
+        // --- MOUSE WHEEL THROTTLE LOGIC ---
+        document.addEventListener('wheel', (e) => {
+            if (!gameStarted || isMobile) return;
+            e.preventDefault();
+            const step = 0.05;
+            if (e.deltaY < 0) {
+                stickyThrottleValue = Math.min(1.0, stickyThrottleValue + step); // Scroll Up -> Throttle Up
+            } else {
+                stickyThrottleValue = Math.max(0.0, stickyThrottleValue - step); // Scroll Down -> Throttle Down
+            }
+            currentThrottle = stickyThrottleValue;
+        }, { passive: false });
+
         function setupTouchJoystick(padId, knobId, callback, isStickyY = false) {
             const pad = document.getElementById(padId);
             const knob = document.getElementById(knobId);
@@ -1090,7 +1099,6 @@
             droneGroup.position.copy(drone.position);
             droneGroup.quaternion.copy(drone.rotation);
 
-            // Update Audio loop state based on throttle & speed
             updateAudio(currentThrottle, drone.velocity.length());
 
             if (drone.position.y <= 1.0 && drone.velocity.length() > 2.0) {
